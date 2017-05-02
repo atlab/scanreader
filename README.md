@@ -7,7 +7,7 @@ We plan to support new versions of ScanImage scans as our lab starts using them.
 
 ### Installation
 ```shell
-pip3 install git+https://github.com/ecobost/scanreader.git
+pip3 install git+https://github.com/atlab/scanreader.git
 ```
 
 ### Usage
