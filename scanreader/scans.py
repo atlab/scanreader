@@ -126,20 +126,84 @@ class BaseScan():
         is_bidirectional = (match.group('is_bidirectional') == 'true') if match else False
         return is_bidirectional
 
-    # TODO: Add these and any other properties we may need
-    # @property
-    # def fps(self):
-    #     #SI.hRoiManager.scanVolumeRate = 5.00651
-    #     pass
-    #
-    # @property
-    # def spatial_fill_fraction(self):
-    #     pass
-    #
-    # @property
-    # def raster_phase(self):
-    #     pass
-    #
+    @property
+    def seconds_per_line(self):
+        match = re.search(r'hRoiManager\.linePeriod = (?P<secs_per_line>.*)', self.header)
+        seconds_per_line = float(match.group('secs_per_line')) if match else None
+        return seconds_per_line
+
+    @property
+    def num_fields(self):
+        raise NotImplementedError('Subclasses of BaseScan must implement this property')
+
+    @property
+    def field_depths(self):
+        raise NotImplementedError('Subclasses of BaseScan must implement this property')
+
+    # Properties from here on are not strictly necessary
+    @property
+    def fps(self):
+        match = re.search(r'hRoiManager\.scanVolumeRate = (?P<fps>.*)',self.header)
+        fps = float(match.group('fps')) if match else None
+        return fps
+
+    @property
+    def spatial_fill_fraction(self):
+        match = re.search(r'hScan2D\.fillFractionSpatial = (?P<spatial_ff>.*)', self.header)
+        spatial_fill_fraction = float(match.group('spatial_ff')) if match else None
+        return spatial_fill_fraction
+
+    @property
+    def temporal_fill_fraction(self):
+        match = re.search(r'hScan2D\.fillFractionTemporal = (?P<temporal_ff>.*)', self.header)
+        temporal_fill_fraction = float(match.group('temporal_ff')) if match else None
+        return temporal_fill_fraction
+
+    @property
+    def uses_fastZ(self):
+        match = re.search(r'hFastZ\.enable = (?P<uses_fastZ>.*)', self.header)
+        uses_fastZ = (match.group('uses_fastZ') in ['true', '1']) if match else None
+        return uses_fastZ
+
+    @property
+    def num_requested_frames(self):
+        if self.uses_fastZ:
+            match = re.search(r'hFastZ\.numVolumes = (?P<num_frames>.*)', self.header)
+        else:
+            match = re.search(r'hStackManager\.framesPerSlice = (?P<num_frames>.*)',
+                              self.header)
+        num_requested_frames = int(match.group('num_frames')) if match else None
+        return num_requested_frames
+
+    @property
+    def zstep_in_microns(self):
+        match = re.search(r"hStackManager\.stackZStepSize = (?P<zstep>.*)", self.header)
+        zstep_in_microns = float(match.group('zstep')) if match else None
+        return zstep_in_microns
+
+    @property
+    def scanner_type(self):
+        match = re.search(r"hScan2D\.scannerType = '(?P<scanner_type>.*)'", self.header)
+        scanner_type = match.group('scanner_type') if match else None
+        return scanner_type
+
+    @property
+    def scanner_frequency(self):
+        match = re.search(r'hScan2D\.scannerFrequency = (?P<scanner_freq>.*)', self.header)
+        scanner_frequency = float(match.group('scanner_freq')) if match else None
+        return scanner_frequency
+
+    @property
+    def _pixels_per_line(self):
+        """Pixels scanned per line, may differ from image width due to join_contiguous."""
+        match = re.search(r'hRoiManager\.pixelsPerLine = (?P<pix_per_line>.*)', self.header)
+        pixels_per_line = int(match.group('pix_per_line')) if match else None
+        return pixels_per_line
+
+    #@property
+    #def fastAngleMultiplier: multiplier in width
+    #def slowAngle multiplie: multiplier in height
+
     # @property
     # def x_in_microns(self):
     #     pass
@@ -152,14 +216,6 @@ class BaseScan():
     # def z_in_microns(self):
     #     # SI.hFastZ.positionAbsolute = 1288.2
     #     pass
-
-    @property
-    def num_fields(self):
-        raise NotImplementedError('Subclasses of BaseScan must implement this property')
-
-    @property
-    def field_depths(self):
-        raise NotImplementedError('Subclasses of BaseScan must implement this property')
 
     def read_data(self, filenames):
         """ Set self.header and self.filenames. Data is read lazily when needed.
@@ -258,15 +314,6 @@ class BaseScan():
         pages = pages.reshape(new_shape).transpose([1, 3, 4, 2, 0])
 
         return pages
-""" 
-Ignored properties (from TIFFReader): (don't seem important)
-    slice_pitch
-    is_structural
-    requested_frames
-    dwell_time
-    zoom
-"""
-
 
 class ScanLegacy(BaseScan):
     """Scan versions 4 and below. Not implemented. """
@@ -302,6 +349,12 @@ class Scan5(BaseScan):
     def shape(self):
         return (self.num_fields, self.image_height, self.image_width, self.num_channels,
                 self.num_frames)
+
+    @property
+    def zoom(self):
+        match = re.search(r'hRoiManager\.scanZoomFactor = (?P<zoom>.*)', self.header)
+        zoom = float(match.group('zoom')) if match else None
+        return zoom
 
     def __getitem__(self, key):
         """ In non-multiROI, all fields have the same x, y dimensions. """
@@ -372,12 +425,6 @@ class Scan5MultiROI(BaseScan):
         return [field.depth for field in self.fields]
 
     @property
-    def _seconds_per_line(self):
-        match = re.search(r'hRoiManager\.linePeriod = (?P<secs_per_line>.*)', self.header)
-        seconds_per_line = float(match.group('secs_per_line')) if match else None
-        return seconds_per_line
-
-    @property
     def _fly_to_seconds(self):
         match = re.search(r'hScan2D\.flytoTimePerScanfield = (?P<fly_to_seconds>.*)',
                           self.header)
@@ -388,7 +435,7 @@ class Scan5MultiROI(BaseScan):
     def num_fly_to_lines(self):
         """ Number of lines recorded in the tiff page while flying to a different field, 
         i.e., distance between fields in the tiff page."""
-        num_fly_to_lines = self._fly_to_seconds / self._seconds_per_line
+        num_fly_to_lines = self._fly_to_seconds / self.seconds_per_line
         num_fly_to_lines = int(np.ceil(num_fly_to_lines))
         if self.is_bidirectional:
             # line scanning always starts at one end of the image so this has to be even
