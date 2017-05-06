@@ -43,12 +43,13 @@ class ROI:
             # if scanfield_info['enable']: # this is always 1 even if ROI is disabled
             # Get scanfield info
             width, height = scanfield_info['pixelResolutionXY']
-            x, y = scanfield_info['centerXY']
+            xcenter, ycenter = scanfield_info['centerXY']
             size_in_x, size_in_y = scanfield_info['sizeXY']
 
             # Create scanfield
-            new_scanfield = Field(height=height, width=width, depth=scanfield_depth, x=x,
-                                  y=y, size_in_x=size_in_x, size_in_y=size_in_y)
+            new_scanfield = Field(height=height, width=width, depth=scanfield_depth,
+                                  x=xcenter, y=ycenter, width_in_degrees=size_in_x,
+                                  height_in_degrees=size_in_y)
             self._scanfields.append(new_scanfield)
 
         # Sort them by depth (to ease interpolation)
@@ -93,19 +94,19 @@ class ROI:
 
                     field.depth = int(round(scanning_depth))
 
-                    scanfield_xs = [s._x for s in self.scanfields]
-                    field._x = np.interp(scanning_depth, scanfield_depths, scanfield_xs)
+                    scanfield_xs = [s.x for s in self.scanfields]
+                    field.x = np.interp(scanning_depth, scanfield_depths, scanfield_xs)
 
-                    scanfield_ys = [s._y for s in self.scanfields]
-                    field._y = np.interp(scanning_depth, scanfield_depths, scanfield_ys)
+                    scanfield_ys = [s.y for s in self.scanfields]
+                    field.y = np.interp(scanning_depth, scanfield_depths, scanfield_ys)
 
-                    scanfield_sizes_in_x = [s._size_in_x for s in self.scanfields]
-                    field._size_in_x = np.interp(scanning_depth, scanfield_depths,
-                                                 scanfield_sizes_in_x)
+                    scanfield_widths = [s.width_in_degrees for s in self.scanfields]
+                    field.width_in_degrees = np.interp(scanning_depth, scanfield_depths,
+                                                       scanfield_widths)
 
-                    scanfield_sizes_in_y = [s._size_in_y for s in self.scanfields]
-                    field._size_in_y = np.interp(scanning_depth, scanfield_depths,
-                                                 scanfield_sizes_in_y)
+                    scanfield_heights = [s.height_in_degrees for s in self.scanfields]
+                    field.height_in_degrees = np.interp(scanning_depth, scanfield_depths,
+                                                 scanfield_heights)
 
         return field
 
@@ -122,19 +123,18 @@ class Field:
             For now, all fields have the same width so all xslices are slice(None).
         output_yslices: list of slices. Where to paste this field in the output field.
         output_xslices: list of slices. Where to paste this field in the output field.
-        _x, _y: Coordinates of the upper left corner of the field in the scan (relative 
-            units).
-        _size_in_x: Size of the field in the x coordinate (same units as _x).
-        _size_in_y: Size of the field in the y coordinate (same units as _y).
+        x, y: Coordinates of the center of the field in the scan (in scan angle degrees).
+        height_in_degrees: height of the field in degrees of the scan angle.
+        width_in_degrees: width of the field in degrees of the scan angle.
         
     Example:
         output_field[output_yslice, output_xslice] = page[yslice, xslice]
         
     When a field is formed by joining two or more subfields (via join_contiguous), the 
     slice lists hold two or more slices representing where each subfield will be taken
-    from the page and inserted in the (joint) output field. Attributes height, width, _x,
-     _y, _size_in_x and _size_in_y are adjusted accordingly. For non-contiguous fields,
-     each slice list has a single slice.
+    from the page and inserted in the (joint) output field. Attributes height, width, x,
+    y, height_in_degrees and width_in_degrees are adjusted accordingly. For non-contiguous  
+    fields, each slice list has a single slice.
      
      Note:
         Slices in xslices, yslices, output_xslices and output_yslices hold two promises:
@@ -144,8 +144,8 @@ class Field:
         
     """
     def __init__(self, height=None, width=None, depth=None, yslices=None, xslices=None,
-                 output_yslices=None, output_xslices=None, x=None, y=None, size_in_x=None,
-                 size_in_y=None):
+                 output_yslices=None, output_xslices=None, x=None, y=None,
+                 width_in_degrees=None, height_in_degrees=None):
         self.height = height
         self.width = width
         self.depth = depth
@@ -153,10 +153,10 @@ class Field:
         self.yslices = yslices
         self.output_xslices = output_xslices
         self.output_yslices = output_yslices
-        self._x = x
-        self._y = y
-        self._size_in_x = size_in_x
-        self._size_in_y = size_in_y
+        self.x = x
+        self.y = y
+        self.width_in_degrees = width_in_degrees
+        self.height_in_degrees = height_in_degrees
 
     @property
     def has_contiguous_subfields(self):
@@ -167,9 +167,9 @@ class Field:
         return Field(height=self.height, width=self.width, depth=self.depth,
                      yslices=self.yslices, xslices=self.xslices,
                      output_yslices=self.output_yslices,
-                     output_xslices=self.output_xslices,
-                     x=self._x, y=self._y, size_in_x=self._size_in_x,
-                     size_in_y=self._size_in_y)
+                     output_xslices=self.output_xslices, x=self.x, y=self.y,
+                     width_in_degrees=self.width_in_degrees,
+                     height_in_degrees=self.height_in_degrees)
 
     def _type_of_contiguity(self, field2):
         """ Compute how field 2 is contiguous to this one. 
@@ -182,15 +182,15 @@ class Field:
                Whether field 2 is above, below, to the left or to the right of this field.
         """
         position = Position.NONCONTIGUOUS
-        if self._size_in_y == field2._size_in_y:
-            if self._y == field2._y + field2._size_in_y:
+        if self.height_in_degrees == field2.height_in_degrees:
+            if self.y == field2.y + field2.height_in_degrees:
                 position = Position.ABOVE
-            if field2._y == self._y + self._size_in_y:
+            if field2.y == self.y + self.height_in_degrees:
                 position = Position.BELOW
-        if self._size_in_x == field2._size_in_x:
-            if self._x == field2._x + field2._size_in_x:
+        if self.width_in_degrees == field2.width_in_degrees:
+            if self.x == field2.x + field2.width_in_degrees:
                 position = Position.LEFT
-            if field2._x == self._x + self._size_in_x:
+            if field2.x == self.x + self.width_in_degrees:
                 position = Position.RIGHT
 
         return position
@@ -217,8 +217,8 @@ class Field:
             self.output_yslices = updated_yslices + field2.output_yslices
 
             # Update other attributes
-            self._y = field2._y
-            self._size_in_y += field2._size_in_y
+            self.y = field2.y
+            self.height_in_degrees += field2.height_in_degrees
             self.height += field2.height
 
         if type_of_contiguity == Position.BELOW:  # field2 is below self
@@ -229,7 +229,7 @@ class Field:
             self.output_yslices += updated_yslices
 
             # Update other attributes
-            self._size_in_y += field2._size_in_y
+            self.height_in_degrees += field2.height_in_degrees
             self.height += field2.height
 
         if type_of_contiguity == Position.LEFT:  # field2 is to the left of self
@@ -240,8 +240,8 @@ class Field:
             self.output_xslices = updated_xslices + field2.output_xslices
 
             # Update other attributes
-            self._x = field2._x
-            self._size_in_x += field2._size_in_x
+            self.x = field2.x
+            self.width_in_degrees += field2.width_in_degrees
             self.width += field2.width
 
         if type_of_contiguity == Position.RIGHT:  # field2 is to the right of self
@@ -252,7 +252,7 @@ class Field:
             self.output_xslices += updated_xslices
 
             # Update other attributes
-            self._size_in_x += field2._size_in_x
+            self.width_in_degrees += field2.width_in_degrees
             self.width += field2.width
 
         # These just get appended no matter the type of contiguity

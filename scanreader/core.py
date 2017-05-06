@@ -12,7 +12,7 @@ from glob import glob
 from os import path
 import re
 from .exceptions import ScanImageVersionError, PathnameError
-from .scans import Scan5, Scan5MultiROI
+from .scans import Scan5Point1,Scan5Point2, Scan2016b, ScanMultiROI
 
 def read_scan(pathnames, join_contiguous=False):
     """ Reads a ScanImage scan.
@@ -36,13 +36,15 @@ def read_scan(pathnames, join_contiguous=False):
     version = get_scanimage_version(tiff_file.info())
 
     # Select the appropriate scan object
-    if version.startswith('5'):
-        scan = Scan5()
-    elif version in  ['2016b']:
+    if version == '5.1':
+        scan = Scan5Point1()
+    elif version == '5.2':
+        scan = Scan5Point2()
+    elif version == '2016b':
         if is_scan_multiROI(tiff_file.info()):
-            scan = Scan5MultiROI(join_contiguous=join_contiguous)
+            scan = ScanMultiROI(join_contiguous=join_contiguous)
         else:
-            scan = Scan5()
+            scan = Scan2016b()
     else:
         error_msg = 'Sorry, ScanImage version {} is not supported'.format(version)
         raise ScanImageVersionError(error_msg)

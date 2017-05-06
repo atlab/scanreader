@@ -20,9 +20,9 @@ print(scan.num_channels)
 print(scan.num_fields)
 
 for field in scan:
-	# process field (4-d array: \[x, y, channels, frames\])
+	# process field (4-d array: [x, y, channels, frames])
 
-x = scan[:] # 5-d array \[fields, x, y, channel, frames\]
+x = scan[:] # 5-d array [fields, x, y, channel, frames]
 y = scan[:2, :, :, 0, -1000:] # 5-d array: last 1000 frames of first 2 fields on the first channel
 z = scan[1] # 4-d array: the second field (over all channels and time)
 ```

@@ -1,6 +1,15 @@
 """
 ScanImage scans. Each version handles things a little differently. Scan objects are 
 usually instantiated by a call to scanreader.read_scan().
+
+Hierarchy:
+BaseScan
+    ScanLegacy
+    BaseScan5
+        Scan5Point1
+        Scan5Point2
+            Scan2016b
+    ScanMultiRoi
 """
 from tifffile import TiffFile
 from tifffile.tifffile import matlabstr2py
@@ -194,28 +203,20 @@ class BaseScan():
         return scanner_frequency
 
     @property
-    def _pixels_per_line(self):
-        """Pixels scanned per line, may differ from image width due to join_contiguous."""
-        match = re.search(r'hRoiManager\.pixelsPerLine = (?P<pix_per_line>.*)', self.header)
-        pixels_per_line = int(match.group('pix_per_line')) if match else None
-        return pixels_per_line
+    def _y_angle_scale_factor(self):
+        """ Scan angles in y are scaled by this factor, shrinking the angle range."""
+        match = re.search(r'hRoiManager\.scanAngleMultiplierSlow = (?P<angle_scaler>.*)',
+                          self.header)
+        y_angle_scaler = float(match.group('angle_scaler')) if match else None
+        return y_angle_scaler
 
-    #@property
-    #def fastAngleMultiplier: multiplier in width
-    #def slowAngle multiplie: multiplier in height
-
-    # @property
-    # def x_in_microns(self):
-    #     pass
-    #
-    # @property
-    # def y_in_microns(self):
-    #     pass
-    #
-    # @property
-    # def z_in_microns(self):
-    #     # SI.hFastZ.positionAbsolute = 1288.2
-    #     pass
+    @property
+    def _x_angle_scale_factor(self):
+        """ Scan angles in x are scaled by this factor, shrinking the angle range."""
+        match = re.search(r'hRoiManager\.scanAngleMultiplierFast = (?P<angle_scaler>.*)',
+                          self.header)
+        x_angle_scaler = float(match.group('angle_scaler')) if match else None
+        return x_angle_scaler
 
     def read_data(self, filenames):
         """ Set self.header and self.filenames. Data is read lazily when needed.
@@ -319,12 +320,11 @@ class ScanLegacy(BaseScan):
     """Scan versions 4 and below. Not implemented. """
 
     def __init__(self):
-        raise NotImplementedError('Legacy scans not supported')
+        raise NotImplementedError('Legacy scans are not supported.')
 
-
-class Scan5(BaseScan):
+class BaseScan5(BaseScan):
     """ScanImage 5 scans. 
-    Only one field per scanning depth and all fields have the same y, x dimensions. """
+    Only one field per scanning depth and all fields have the same y, x dimensions."""
 
     def __init__(self):
         super().__init__()
@@ -387,19 +387,50 @@ class Scan5(BaseScan):
 
         # If original index was an integer, delete that axis (as in numpy indexing)
         int_indices = [i for i, index in enumerate(full_key) if isinstance(index, int)]
-        int_indices = filter(lambda index: index not in [1, 2], int_indices) # ignore y, x which would have been applied as int already
+        int_indices = filter(lambda index: index not in [1, 2], int_indices) # ignore y, x which are applied as int already
         item = np.squeeze(item, axis=tuple(int_indices))
 
         return item
 
 
-class Scan5MultiROI(BaseScan):
+class Scan5Point1(BaseScan5):
+    """ ScanImage 5.1. Basic."""
+    pass
+
+
+class Scan5Point2(BaseScan5):
+    """ ScanImage 5.2. Addition of FOV measures in microns."""
+    @property
+    def image_height_in_microns(self):
+        match = re.search(r'hRoiManager\.imagingFovUm = (?P<fov_corners>.*)', self.header)
+        image_height_in_microns = None
+        if match:
+            fov_corners = matlabstr2py(match.group('fov_corners'))
+            image_height_in_microns = fov_corners[2][1] - fov_corners[1][1]  # y1-y0
+        return image_height_in_microns
+
+    @property
+    def image_width_in_microns(self):
+        match = re.search(r'hRoiManager\.imagingFovUm = (?P<fov_corners>.*)', self.header)
+        image_width_in_microns = None
+        if match:
+            fov_corners = matlabstr2py(match.group('fov_corners'))
+            image_width_in_microns = fov_corners[1][0] - fov_corners[0][0] # x1-x0
+        return image_width_in_microns
+
+
+class Scan2016b(Scan5Point2):
+    """ ScanImage 2016b. Same as 5.2"""
+    pass
+
+
+class ScanMultiROI(BaseScan):
     """An extension of ScanImage v5 that manages multiROI data (output from mesoscope).
      
      Attributes:
          join_contiguous: A bool. Whether contiguous fields are joined into one.
-         rois: List of ROI objects
-         fields: List of Field objects (defined in multiROI)
+         rois: List of ROI objects (defined in multiroi.py)
+         fields: List of Field objects (defined in multiroi.py)
      """
 
     def __init__(self, join_contiguous):
@@ -411,6 +442,10 @@ class Scan5MultiROI(BaseScan):
     @property
     def num_fields(self):
         return len(self.fields)
+
+    @property
+    def num_rois(self):
+        return len(self.rois)
 
     @property
     def field_widths(self):
@@ -442,9 +477,21 @@ class Scan5MultiROI(BaseScan):
             num_fly_to_lines += (num_fly_to_lines % 2)
         return num_fly_to_lines
 
+    def _degrees_to_microns(self, degrees):
+        """ Convert scan angle degrees to microns using the objective resolution."""
+        match = re.search(r'objectiveResolution = (?P<deg2um_factor>.*)', self.header)
+        microns = (degrees * float(match.group('deg2um_factor'))) if match else None
+        return microns
+
     @property
-    def num_rois(self):
-        return len(self.rois)
+    def field_heights_in_microns(self):
+        field_heights_in_degrees = [field.height_in_degrees for field in self.fields]
+        return [self._degrees_to_microns(deg) for deg in field_heights_in_degrees]
+
+    @property
+    def field_widths_in_microns(self):
+        field_widths_in_degrees = [field.width_in_degrees for field in self.fields]
+        return [self._degrees_to_microns(deg) for deg in field_widths_in_degrees]
 
     def read_data(self, filenames):
         """ Set the header, create rois and fields (joining them if necessary)"""
