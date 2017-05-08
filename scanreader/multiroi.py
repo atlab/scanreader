@@ -74,7 +74,7 @@ class ROI:
         else:
             if len(self.scanfields) == 1: # single scanfield extending from -inf to inf
                 field = self.scanfields[0].copy()
-                field.depth = int(round(scanning_depth))
+                field.depth = round(scanning_depth)
 
             else: # interpolate between scanfield
                 scanfield_depths = [s.depth for s in self.scanfields]
@@ -85,14 +85,14 @@ class ROI:
                     scanfield_heights = [s.height for s in self.scanfields]
                     field.height = np.interp(scanning_depth, scanfield_depths,
                                              scanfield_heights)
-                    field.height = int(round(field.height)) # TODO: round, floor or ceil?
+                    field.height = round(field.height / 2) * 2 # round to the closest even
 
                     scanfield_widths = [s.width for s in self.scanfields]
                     field.width = np.interp(scanning_depth, scanfield_depths,
                                             scanfield_widths)
-                    field.width = int(round(field.width)) # TODO: round, floor or ceil?
+                    field.width = round(field.width / 2) * 2 # round to the closest even
 
-                    field.depth = int(round(scanning_depth))
+                    field.depth = round(scanning_depth)
 
                     scanfield_xs = [s.x for s in self.scanfields]
                     field.x = np.interp(scanning_depth, scanfield_depths, scanfield_xs)
