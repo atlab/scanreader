@@ -53,6 +53,7 @@ class BaseScan():
     """
     def __init__(self):
         self.filenames = None
+        self.dtype = None
         self._tiff_files = None
         self.header = ''
         self._field_for_iter = 0
@@ -218,15 +219,19 @@ class BaseScan():
         x_angle_scaler = float(match.group('angle_scaler')) if match else None
         return x_angle_scaler
 
-    def read_data(self, filenames):
-        """ Set self.header and self.filenames. Data is read lazily when needed.
+    def read_data(self, filenames, dtype):
+        """ Set self.header, self.filenames and self.dtype. Data is read lazily when needed.
         
         Args:
             filenames: List of strings. Tiff filenames.
+            dtype: Data type of the output array.
         """
         # Set header (used to read ScanImage metadata information).
         tiff_file = TiffFile(filenames[0], pages=[0])
         self.header = tiff_file.info()
+
+        # Set dtype of readed data
+        self.dtype=dtype
 
         # Set filenames
         self.filenames = filenames
@@ -293,7 +298,8 @@ class BaseScan():
                     pages_to_read.append(new_index)
 
         # Read pages
-        pages = np.empty([len(pages_to_read), self._page_height, self._page_width])
+        pages = np.empty([len(pages_to_read), self._page_height, self._page_width],
+                         dtype=self.dtype)
         start_page = 0
         for tiff_file in self.tiff_files:
 
@@ -320,7 +326,7 @@ class ScanLegacy(BaseScan):
     """Scan versions 4 and below. Not implemented. """
 
     def __init__(self):
-        raise NotImplementedError('Legacy scans are not supported.')
+        raise NotImplementedError('Legacy scans not supported')
 
 class BaseScan5(BaseScan):
     """ScanImage 5 scans. 
@@ -493,13 +499,13 @@ class ScanMultiROI(BaseScan):
         field_widths_in_degrees = [field.width_in_degrees for field in self.fields]
         return [self._degrees_to_microns(deg) for deg in field_widths_in_degrees]
 
-    def read_data(self, filenames):
+    def read_data(self, filenames, dtype):
         """ Set the header, create rois and fields (joining them if necessary)"""
-        super().read_data(filenames)
+        super().read_data(filenames, dtype)
         self._create_rois()
         self._compute_fields()
         if self.join_contiguous:
-           self._join_contiguous_fields()
+            self._join_contiguous_fields()
 
     def _create_rois(self):
         """Create scan rois from the configuration file. """

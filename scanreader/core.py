@@ -14,11 +14,12 @@ import re
 from .exceptions import ScanImageVersionError, PathnameError
 from .scans import Scan5Point1,Scan5Point2, Scan2016b, ScanMultiROI
 
-def read_scan(pathnames, join_contiguous=False):
+def read_scan(pathnames, dtype=float, join_contiguous=False):
     """ Reads a ScanImage scan.
 
     Args:
         pathnames: String or list of strings. Pathname(s) or pathname pattern(s) to read.
+        dtype: Data-type. Data type of the output array.
         join_contiguous: Boolean. For multiROI scans (2016b and beyond) it will join 
             contiguous scanfields in the same depth. No effect in non-multiROI scans.
     
@@ -50,7 +51,7 @@ def read_scan(pathnames, join_contiguous=False):
         raise ScanImageVersionError(error_msg)
 
     # Read metadata and data (lazy operation)
-    scan.read_data(filenames)
+    scan.read_data(filenames, dtype=dtype)
 
     # Close tiff_file
     tiff_file.close()
