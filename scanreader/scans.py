@@ -622,7 +622,7 @@ class ScanMultiROI(BaseScan):
         # Slice each field (this is not so memory efficient)
         output_shape = (pages.shape[0], len(ys_list[0]), len(xs_list[0]), pages.shape[3],
                         pages.shape[4])
-        item = np.empty(output_shape)
+        item = np.empty(output_shape, dtype=self.dtype)
         for i, (field_id, y_list, x_list) in enumerate(zip(field_list, ys_list, xs_list)):
             field = self.fields[field_id]
 
