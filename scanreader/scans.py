@@ -511,6 +511,7 @@ class ScanMultiROI(BaseScan):
         """Create scan rois from the configuration file. """
         scanimage_metadata = self.tiff_files[0].scanimage_metadata
         roi_cfgs = scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
+        roi_cfgs = roi_cfgs if isinstance(roi_cfgs, list) else [roi_cfgs]
 
         self.rois = []
         for roi_cfg in roi_cfgs:

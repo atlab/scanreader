@@ -30,12 +30,12 @@ class ROI:
     def _create_scanfields(self):
         # Get scanfield configuration info
         scanfield_cfgs = self.roi_info['scanfields']
-        if isinstance(scanfield_cfgs, dict):
+        if not isinstance(scanfield_cfgs, list):
             scanfield_cfgs = [scanfield_cfgs] # make list if single scanfield
 
         # Get scanfield depths
         scanfield_depths = self.roi_info['zs']
-        if isinstance(scanfield_depths, int):
+        if not isinstance(scanfield_depths, list):
             scanfield_depths = [scanfield_depths]
 
         self._scanfields = []
