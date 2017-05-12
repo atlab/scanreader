@@ -10,11 +10,12 @@ Example:
 from tifffile import TiffFile
 from glob import glob
 from os import path
+import numpy as np
 import re
 from .exceptions import ScanImageVersionError, PathnameError
 from .scans import Scan5Point1,Scan5Point2, Scan2016b, ScanMultiROI
 
-def read_scan(pathnames, dtype=float, join_contiguous=False):
+def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     """ Reads a ScanImage scan.
 
     Args:
