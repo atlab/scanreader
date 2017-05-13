@@ -25,7 +25,8 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
             contiguous scanfields in the same depth. No effect in non-multiROI scans.
     
     Returns:
-        A Scan object (subclass of BaseScan) with metadata and data. See Readme.
+        A Scan object (subclass of BaseScan) with metadata and data. See Readme for 
+        details.
     """
     # Expand wildcards
     filenames = expand_wildcard(pathnames)
