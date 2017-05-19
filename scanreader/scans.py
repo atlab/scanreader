@@ -512,6 +512,9 @@ class ScanMultiROI(BaseScan):
         roi_infos = scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
         roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
 
+        roi_infos  = roi_infos[:5]
+        print('Cuack!')
+
         rois = [ROI(roi_info) for roi_info in roi_infos]
         return rois
 
@@ -548,12 +551,17 @@ class ScanMultiROI(BaseScan):
         return fields
 
     def _join_contiguous_fields(self):
-        """ In each scanning depth, go over all fields joining those that are contiguous.
+        """ In each scanning depth, join fields that are contiguous.
         
-        When two fields are joined, it deletes the one appearing last in the fields list
-        and modifies info such as field height, field width and slices in the first field.        
-        Any rectangular area in the scan formed by the union of two or more fields will 
-        be treated as a single field after this operation. 
+        Fields are considered contiguous if they appear next to each other and their size
+        in the touching axis is the same. Process is iterative: it tries to join each 
+        field with the remaining ones (checked in order); at the first union it will break
+        and restart the process at the first field. When two fields are joined, it deletes
+        the one appearing last and modifies info such as field height, field width and 
+        slices in the one appearing first. 
+        
+        Any rectangular area in the scan formed by the union of two or more fields which 
+        have been joined will be treated as a single field after this operation. 
         """
         for scanning_depth in self.scanning_depths:
             two_fields_were_joined = True

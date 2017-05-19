@@ -22,7 +22,8 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
         pathnames: String or list of strings. Pathname(s) or pathname pattern(s) to read.
         dtype: Data-type. Data type of the output array.
         join_contiguous: Boolean. For multiROI scans (2016b and beyond) it will join 
-            contiguous scanfields in the same depth. No effect in non-multiROI scans.
+            contiguous scanfields in the same depth. No effect in non-multiROI scans. See
+            help of ScanMultiROI._join_contiguous_fields for details.
     
     Returns:
         A Scan object (subclass of BaseScan) with metadata and data. See Readme for details.
