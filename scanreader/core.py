@@ -1,4 +1,4 @@
-"""
+""" 
 Reader for ScanImage 5 scans (including multiROI).
 
 Example:
@@ -25,8 +25,7 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
             contiguous scanfields in the same depth. No effect in non-multiROI scans.
     
     Returns:
-        A Scan object (subclass of BaseScan) with metadata and data. See Readme for 
-        details.
+        A Scan object (subclass of BaseScan) with metadata and data. See Readme for details.
     """
     # Expand wildcards
     filenames = expand_wildcard(pathnames)
@@ -119,4 +118,3 @@ def is_scan_multiROI(info):
     match = re.search(r'hRoiManager\.mroiEnable = (?P<is_multiROI>.)', info)
     is_multiROI = (match.group('is_multiROI') == '1') if match else None
     return is_multiROI
-

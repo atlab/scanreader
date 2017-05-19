@@ -40,7 +40,6 @@ class BaseScan():
     Note:
         We use frames as in video frames, i.e., number of timesteps the scan was recorded.
         ScanImage uses frames to refer to slices/scanning depths in the scan.
-        
     """
     """
     Interface rules:
@@ -66,7 +65,7 @@ class BaseScan():
 
     @tiff_files.deleter
     def tiff_files(self):
-        for tiff_file in self.tiff_files:
+        for tiff_file in self._tiff_files:
             tiff_file.close()
         self._tiff_files = None
 
@@ -102,7 +101,7 @@ class BaseScan():
 
     @property
     def num_frames(self):
-        # Each tiff page is an image at a given channel, scanning depth combination.
+        """ Each tiff page is an image at a given channel, scanning depth combination."""
         num_pages = sum([len(tiff_file) for tiff_file in self.tiff_files])
         num_frames = num_pages / (self.num_scanning_depths * self.num_channels)
         if not num_frames.is_integer():
@@ -110,18 +109,6 @@ class BaseScan():
                          '* num_channels'.format(num_pages))
             raise ValueError(error_msg)
         return int(num_frames)
-
-    @property
-    def _page_height(self):
-        match = re.search(r'image_length \([^)]*\) (?P<page_height>.*)', self.header)
-        page_height = int(match.group('page_height')) if match else None
-        return page_height
-
-    @property
-    def _page_width(self):
-        match = re.search(r'image_width \([^)]*\) (?P<page_width>.*)', self.header)
-        page_width = int(match.group('page_width')) if match else None
-        return page_width
 
     @property
     def is_multiROI(self):
@@ -143,12 +130,25 @@ class BaseScan():
         return seconds_per_line
 
     @property
+    def _page_height(self):
+        match = re.search(r'image_length \([^)]*\) (?P<page_height>.*)', self.header)
+        page_height = int(match.group('page_height')) if match else None
+        return page_height
+
+    @property
+    def _page_width(self):
+        match = re.search(r'image_width \([^)]*\) (?P<page_width>.*)', self.header)
+        page_width = int(match.group('page_width')) if match else None
+        return page_width
+
+    @property
     def num_fields(self):
         raise NotImplementedError('Subclasses of BaseScan must implement this property')
 
     @property
     def field_depths(self):
         raise NotImplementedError('Subclasses of BaseScan must implement this property')
+
 
     # Properties from here on are not strictly necessary
     @property
@@ -187,7 +187,7 @@ class BaseScan():
 
     @property
     def zstep_in_microns(self):
-        match = re.search(r"hStackManager\.stackZStepSize = (?P<zstep>.*)", self.header)
+        match = re.search(r'hStackManager\.stackZStepSize = (?P<zstep>.*)', self.header)
         zstep_in_microns = float(match.group('zstep')) if match else None
         return zstep_in_microns
 
@@ -229,6 +229,7 @@ class BaseScan():
         # Set header (used to read ScanImage metadata information).
         tiff_file = TiffFile(filenames[0], pages=[0])
         self.header = tiff_file.info()
+        tiff_file.close()
 
         # Set dtype of readed data
         self.dtype=dtype
@@ -263,7 +264,8 @@ class BaseScan():
         raise NotImplementedError('Subclasses of BaseScan must implement this method')
 
     def _read_pages(self, slice_list ,channel_list, frame_list):
-        """ Read the pages with the content of each slice, channel, frame combination.
+        """ Reads the tiff pages with the content of each slice, channel, frame 
+        combination.
         
         Each tiff page holds a single depth/channel/frame combination. Channels change 
         first, slices/depths change second and timeframes change last.
@@ -283,7 +285,7 @@ class BaseScan():
         Returns:
             A 5-D array (num_slices, page_height, page_width, num_channels, num_frames).
                 Required pages reshaped to have slice, channel and frame as different
-                dimensions. Channel, slice and frame order received in the input is 
+                dimensions. Channel, slice and frame order received in the input lists are 
                 respected; for instance, if slice_list = [1, 0, 2, 0], then the first 
                 dimension will have four slices: [1, 0, 2, 0]. 
         """
@@ -332,12 +334,9 @@ class BaseScan5(BaseScan):
     """ScanImage 5 scans. 
     Only one field per scanning depth and all fields have the same y, x dimensions."""
 
-    def __init__(self):
-        super().__init__()
-
     @property
     def num_fields(self):
-        return len(self.scanning_depths) # one field per scanning depth
+        return self.num_scanning_depths # one field per scanning depth
 
     @property
     def field_depths(self):
@@ -450,6 +449,10 @@ class ScanMultiROI(BaseScan):
         return len(self.fields)
 
     @property
+    def field_depths(self):
+        return [field.depth for field in self.fields]
+
+    @property
     def num_rois(self):
         return len(self.rois)
 
@@ -460,10 +463,6 @@ class ScanMultiROI(BaseScan):
     @property
     def field_heights(self):
         return [field.height for field in self.fields]
-
-    @property
-    def field_depths(self):
-        return [field.depth for field in self.fields]
 
     @property
     def _fly_to_seconds(self):
@@ -483,12 +482,6 @@ class ScanMultiROI(BaseScan):
             num_fly_to_lines += (num_fly_to_lines % 2)
         return num_fly_to_lines
 
-    def _degrees_to_microns(self, degrees):
-        """ Convert scan angle degrees to microns using the objective resolution."""
-        match = re.search(r'objectiveResolution = (?P<deg2um_factor>.*)', self.header)
-        microns = (degrees * float(match.group('deg2um_factor'))) if match else None
-        return microns
-
     @property
     def field_heights_in_microns(self):
         field_heights_in_degrees = [field.height_in_degrees for field in self.fields]
@@ -499,42 +492,47 @@ class ScanMultiROI(BaseScan):
         field_widths_in_degrees = [field.width_in_degrees for field in self.fields]
         return [self._degrees_to_microns(deg) for deg in field_widths_in_degrees]
 
+    def _degrees_to_microns(self, degrees):
+        """ Convert scan angle degrees to microns using the objective resolution."""
+        match = re.search(r'objectiveResolution = (?P<deg2um_factor>.*)', self.header)
+        microns = (degrees * float(match.group('deg2um_factor'))) if match else None
+        return microns
+
     def read_data(self, filenames, dtype):
-        """ Set the header, create rois and fields (joining them if necessary)"""
+        """ Set the header, create rois and fields (joining them if necessary)."""
         super().read_data(filenames, dtype)
-        self._create_rois()
-        self._compute_fields()
+        self.rois = self._create_rois()
+        self.fields = self._create_fields()
         if self.join_contiguous:
             self._join_contiguous_fields()
 
     def _create_rois(self):
         """Create scan rois from the configuration file. """
         scanimage_metadata = self.tiff_files[0].scanimage_metadata
-        roi_cfgs = scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
-        roi_cfgs = roi_cfgs if isinstance(roi_cfgs, list) else [roi_cfgs]
+        roi_infos = scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
+        roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
 
-        self.rois = []
-        for roi_cfg in roi_cfgs:
-            new_roi = ROI(roi_cfg)
-            self.rois.append(new_roi)
+        rois = [ROI(roi_info) for roi_info in roi_infos]
+        return rois
 
-    def _compute_fields(self):
+    def _create_fields(self):
         """ Go over each slice depth and each roi generating the scanned fields. """
-        self.fields = []
+        fields = []
         for scanning_depth in self.scanning_depths:
-            starting_y = 0
+            starting_line = 0
             for roi in self.rois:
                 new_field = roi.get_field_at(scanning_depth)
 
                 if new_field is not None:
-                    if starting_y + new_field.height > self._page_height:
+                    if starting_line + new_field.height > self._page_height:
                         error_msg = ('Overestimated number of fly to lines ({}) at '
                                      'scanning depth {}'.format(self.num_fly_to_lines,
                                                                 scanning_depth))
                         raise RuntimeError(error_msg)
 
                     # Set xslice and yslice (from where in the page to cut it)
-                    new_field.yslices = [slice(starting_y, starting_y + new_field.height)]
+                    new_field.yslices = [slice(starting_line, starting_line
+                                               + new_field.height)]
                     new_field.xslices = [slice(0, new_field.width)]
 
                     # Set output xslice and yslice (where to paste it in output)
@@ -542,20 +540,20 @@ class ScanMultiROI(BaseScan):
                     new_field.output_xslices = [slice(0, new_field.width)]
 
                     # Compute next starting y
-                    starting_y += new_field.height + self.num_fly_to_lines
+                    starting_line += new_field.height + self.num_fly_to_lines
 
                     # Add field to fields
-                    self.fields.append(new_field)
+                    fields.append(new_field)
+
+        return fields
 
     def _join_contiguous_fields(self):
-        """In each scanning depth, go over all fields joining those that are contiguous.
+        """ In each scanning depth, go over all fields joining those that are contiguous.
         
-        When two fields are joined, the one appearing last in the fields list is deleted 
-        and info such as field height, field width and slices is changed in the first 
-        field.
-        
+        When two fields are joined, it deletes the one appearing last in the fields list
+        and modifies info such as field height, field width and slices in the first field.        
         Any rectangular area in the scan formed by the union of two or more fields will 
-        be considered as a single field after this operation. 
+        be treated as a single field after this operation. 
         """
         for scanning_depth in self.scanning_depths:
             two_fields_were_joined = True
@@ -564,6 +562,7 @@ class ScanMultiROI(BaseScan):
 
                 fields = filter(lambda field: field.depth == scanning_depth, self.fields)
                 for field1, field2 in itertools.combinations(fields, 2):
+
                     if field1.is_contiguous_to(field2):
                         # Change info in field 1 to reflect the union
                         field1.join_with(field2)
@@ -576,7 +575,7 @@ class ScanMultiROI(BaseScan):
                         break
 
     def field_to_slice(self, field_id):
-        """Given a field id return the corresponding slice id. """
+        """ Given a field id return the corresponding slice id."""
         field_depth =  self.fields[field_id].depth
         return self.scanning_depths.index(field_depth)
 
@@ -642,10 +641,10 @@ class ScanMultiROI(BaseScan):
 
                 item[i, output_ys, output_xs] = pages[i, ys, xs]
 
-            # Old version: no contiguous fields
-            #ys = [[field.yslice.start + y] for y in y_list] # nested list needed so numpy slices it as I want
-            #xs = [field.xslice.start + x for x in x_list]
-            #item[i] = pages[i, ys, xs]
+            # # Old version: no contiguous fields
+            # ys = [[field.yslice.start + y] for y in y_list] # nested list needed so numpy slices it as I want
+            # xs = [field.xslice.start + x for x in x_list]
+            # item[i] = pages[i, ys, xs]
 
         # If original index was an integer, delete that axis  (as in numpy indexing)
         int_indices = [i for i, index in enumerate(full_key) if isinstance(index, int)]
