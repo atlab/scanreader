@@ -190,14 +190,16 @@ class Field:
         """
         position = Position.NONCONTIGUOUS
         if np.isclose(self.width_in_degrees, field2.width_in_degrees):
-            if np.isclose(self.y, field2.y + field2.height_in_degrees):
+            expected_distance = self.height_in_degrees / 2 + field2.height_in_degrees / 2
+            if np.isclose(self.y, field2.y + expected_distance):
                 position = Position.ABOVE
-            if np.isclose(field2.y, self.y + self.height_in_degrees):
+            if np.isclose(field2.y, self.y + expected_distance):
                 position = Position.BELOW
         if np.isclose(self.height_in_degrees, field2.height_in_degrees):
-            if np.isclose(self.x, field2.x + field2.width_in_degrees):
+            expected_distance = self.width_in_degrees / 2 + field2.width_in_degrees / 2
+            if np.isclose(self.x, field2.x + expected_distance):
                 position = Position.LEFT
-            if np.isclose(field2.x, self.x + self.width_in_degrees):
+            if np.isclose(field2.x, self.x + expected_distance):
                 position = Position.RIGHT
 
         return position
@@ -212,52 +214,46 @@ class Field:
         Args:
             field2: A second field object.
         """
-        type_of_contiguity = self._type_of_contiguity(field2)
-        if type_of_contiguity == Position.ABOVE:  # field2 is above/atop self
-            # Update output slices
-            field1_yslices = [slice(s.start + field2.height, s.stop + field2.height)
-                               for s in self.output_yslices]
-            self.output_yslices = field1_yslices + field2.output_yslices
-            self.output_xslices = self.output_xslices + field2.output_xslices
+        contiguity = self._type_of_contiguity(field2)
+        if contiguity in [Position.ABOVE, Position.BELOW]:  # contiguous in y axis
+            # Compute some specific attributes
+            if contiguity == Position.ABOVE:  # field2 is above/atop self
+                new_y = field2.y + (self.height_in_degrees / 2)
+                output_yslices1 = [slice(s.start + field2.height, s.stop + field2.height)
+                                   for s in self.output_yslices]
+                output_yslices2 = field2.output_yslices
+            else:  # field2 is below self
+                new_y = self.y + (field2.height_in_degrees / 2)
+                output_yslices1 = self.output_yslices
+                output_yslices2 = [slice(s.start + self.height, s.stop + self.height) for
+                                   s in field2.output_yslices]
 
-            # Update other attributes
-            self.y = field2.y
+            # Set new attributes
+            self.y = new_y
             self.height += field2.height
             self.height_in_degrees += field2.height_in_degrees
-
-        if type_of_contiguity == Position.BELOW:  # field2 is below self
-            # Update output slices
-            field2_yslices = [slice(s.start + self.height, s.stop + self.height)
-                               for s in field2.output_yslices]
-            self.output_yslices = self.output_yslices + field2_yslices
+            self.output_yslices = output_yslices1 + output_yslices2
             self.output_xslices = self.output_xslices + field2.output_xslices
 
-            # Update other attributes
-            self.height += field2.height
-            self.height_in_degrees += field2.height_in_degrees
+        if contiguity in [Position.LEFT, Position.RIGHT]:  # contiguous in x axis
+            # Compute some specific attributes
+            if contiguity == Position.LEFT:  # field2 is to the left of self
+                new_x = field2.x + (self.width_in_degrees / 2)
+                output_xslices1 = [slice(s.start + field2.width, s.stop + field2.width)
+                                   for s in self.output_xslices]
+                output_xslices2 = field2.output_xslices
+            else:  # field2 is to the right of self
+                new_x = self.x + (field2.width_in_degrees / 2)
+                output_xslices1 = self.output_xslices
+                output_xslices2 = [slice(s.start + self.width, s.stop + self.width) for s
+                                   in field2.output_xslices]
 
-        if type_of_contiguity == Position.LEFT:  # field2 is to the left of self
-            # Update output slices
-            self.output_yslices = self.output_yslices + field2.output_yslices
-            field1_xslices = [slice(s.start + field2.width, s.stop + field2.width)
-                               for s in self.output_xslices]
-            self.output_xslices = field1_xslices + field2.output_xslices
-
-            # Update other attributes
-            self.x = field2.x
+            # Set new attributes
+            self.x = new_x
             self.width += field2.width
             self.width_in_degrees += field2.width_in_degrees
-
-        if type_of_contiguity == Position.RIGHT:  # field2 is to the right of self
-            # Update output slices
             self.output_yslices = self.output_yslices + field2.output_yslices
-            field2_xslices = [slice(s.start + self.width, s.stop + self.width)
-                               for s in field2.output_xslices]
-            self.output_xslices = self.output_xslices + field2_xslices
-
-            # Update other attributes
-            self.width += field2.width
-            self.width_in_degrees += field2.width_in_degrees
+            self.output_xslices = output_xslices1 + output_xslices2
 
         # yslices and xslices just get appended regardless of the type of contiguity
         self.yslices = self.yslices + field2.yslices
