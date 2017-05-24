@@ -377,18 +377,20 @@ class BaseScan5(BaseScan):
             utils.check_index_is_in_bounds(i, index, dim_size)
 
         # Get slices/scanning_depths, channels and frames as lists
-        slice_list = utils.listify_index(full_key[0], self.num_scanning_depths)
+        field_list = utils.listify_index(full_key[0], self.num_fields)
+        y_list = utils.listify_index(full_key[1], self.image_height)
+        x_list = utils.listify_index(full_key[2], self.image_width)
         channel_list = utils.listify_index(full_key[3], self.num_channels)
         frame_list = utils.listify_index(full_key[4], self.num_frames)
 
         # Edge case when slice index gives 0 elements or index is empty list, e.g., scan[10:0], scan[[]]
-        if [] in [slice_list, channel_list, frame_list]:
+        if [] in [field_list, y_list, x_list, channel_list, frame_list,]:
             return np.empty(0)
 
         # Read the required pages
-        pages = self._read_pages(slice_list, channel_list, frame_list)
+        pages = self._read_pages(field_list, channel_list, frame_list)
 
-        # Index on y, x
+        # Index on y, x (using the key rather than the list for a bit of efficiency)
         item = pages[:, full_key[1], full_key[2], :, :]
 
         # If original index was an integer, delete that axis (as in numpy indexing)
@@ -606,46 +608,46 @@ class ScanMultiROI(BaseScan):
 
         # Get slices/scanning_depths, channels and frames as lists
         field_list = utils.listify_index(full_key[0], self.num_fields)
-        slice_list = [self.field_to_slice(field_id) for field_id in field_list]
+        y_lists = [utils.listify_index(full_key[1], self.field_heights[field_id]) for
+                   field_id in field_list]
+        x_lists = [utils.listify_index(full_key[2], self.field_widths[field_id]) for
+                   field_id in field_list]
         channel_list = utils.listify_index(full_key[3], self.num_channels)
         frame_list = utils.listify_index(full_key[4], self.num_frames)
-        ys_list = [utils.listify_index(full_key[1], self.field_heights[field_id])
-                   for field_id in field_list]
-        xs_list = [utils.listify_index(full_key[2], self.field_widths[field_id])
-                   for field_id in field_list]
 
         # Edge case when slice index gives 0 elements or index is empty list, e.g., scan[10:0], scan[[]]
-        if [] in [slice_list, channel_list, frame_list]:
+        if [] in [field_list, *y_lists, *x_lists, channel_list, frame_list]:
             return np.empty(0)
 
         # Check output heights and widths match for all fields
-        if not all(len(ys) == len(ys_list[0]) for ys in ys_list):
+        if not all(len(y_list) == len(y_lists[0]) for y_list in y_lists):
             raise FieldDimensionMismatch('Image heights for all fields do not match')
-        if not all(len(xs) == len(xs_list[0]) for xs in xs_list):
+        if not all(len(x_list) == len(x_lists[0]) for x_list in x_lists):
             raise FieldDimensionMismatch('Image widths for all fields do not match')
 
         # Read the required pages
+        slice_list = [self.field_to_slice(field_id) for field_id in field_list]
         pages = self._read_pages(slice_list, channel_list, frame_list)
 
         # Slice each field (this is not so memory efficient)
-        output_shape = (pages.shape[0], len(ys_list[0]), len(xs_list[0]), pages.shape[3],
-                        pages.shape[4])
+        output_shape = (len(field_list), len(y_lists[0]), len(x_lists[0]),
+                        len(channel_list), len(frame_list))
         item = np.empty(output_shape, dtype=self.dtype)
-        for i, (field_id, y_list, x_list) in enumerate(zip(field_list, ys_list, xs_list)):
+        for i, (field_id, y_list, x_list) in enumerate(zip(field_list, y_lists, x_lists)):
             field = self.fields[field_id]
 
             # Over each subfield in field (only one for non-contiguous fields)
-            slices = zip(field.xslices, field.yslices, field.output_xslices,
-                         field.output_yslices)
-            for xslice, yslice, output_xslice, output_yslice in slices:
+            slices = zip(field.yslices, field.xslices, field.output_yslices,
+                         field.output_xslices)
+            for yslice, xslice, output_yslice, output_xslice in slices:
 
-                # Get x, ys indices that need to be accessed in this subfield
-                x_range = range(output_xslice.start, output_xslice.stop)
+                # Get x, y indices that need to be accessed in this subfield
                 y_range = range(output_yslice.start, output_yslice.stop)
-                xs = [x - output_xslice.start + xslice.start for x in x_list if x in x_range]
+                x_range = range(output_xslice.start, output_xslice.stop)
                 ys = [[y - output_yslice.start + yslice.start] for y in y_list if y in y_range]
-                output_xs = [index for index, x in enumerate(x_list) if x in x_range]
+                xs = [x - output_xslice.start + xslice.start for x in x_list if x in x_range]
                 output_ys = [[index] for index, y in enumerate(y_list) if y in y_range]
+                output_xs = [index for index, x in enumerate(x_list) if x in x_range]
                 # ys as nested lists are needed for numpy to slice them correctly
 
                 item[i, output_ys, output_xs] = pages[i, ys, xs]
