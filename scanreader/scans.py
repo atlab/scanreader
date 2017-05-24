@@ -598,7 +598,7 @@ class ScanMultiROI(BaseScan):
 
         # Check each dimension is in bounds
         utils.check_index_is_in_bounds(0, full_key[0], self.num_fields)
-        for field_id in utils.listify_index(full_key[0], self.num_scanning_depths):
+        for field_id in utils.listify_index(full_key[0], self.num_fields):
             utils.check_index_is_in_bounds(1, full_key[1], self.field_heights[field_id])
             utils.check_index_is_in_bounds(2, full_key[2], self.field_widths[field_id])
         utils.check_index_is_in_bounds(3, full_key[3], self.num_channels)
