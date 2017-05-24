@@ -65,9 +65,10 @@ class BaseScan():
 
     @tiff_files.deleter
     def tiff_files(self):
-        for tiff_file in self._tiff_files:
-            tiff_file.close()
-        self._tiff_files = None
+        if self._tiff_files is not None:
+            for tiff_file in self._tiff_files:
+                tiff_file.close()
+            self._tiff_files = None
 
     @property
     def version(self):
@@ -296,8 +297,8 @@ class BaseScan():
         for frame in frame_list:
             for slice in slice_list:
                 for channel in channel_list:
-                    new_index = frame * frame_step + slice * slice_step + channel
-                    pages_to_read.append(new_index)
+                    new_page = frame * frame_step + slice * slice_step + channel
+                    pages_to_read.append(new_page)
 
         # Read pages
         pages = np.empty([len(pages_to_read), self._page_height, self._page_width],
@@ -305,12 +306,12 @@ class BaseScan():
         start_page = 0
         for tiff_file in self.tiff_files:
 
-            # Get indices in output array (pages) and in this tiff file
+            # Get indices in this tiff file and in output array
             final_page_in_file = start_page + len(tiff_file)
             is_page_in_file = lambda page: page in range(start_page, final_page_in_file)
             pages_in_file = filter(is_page_in_file, pages_to_read)
-            global_indices = [is_page_in_file(page) for page in pages_to_read]
             file_indices = [page - start_page for page in pages_in_file]
+            global_indices = [is_page_in_file(page) for page in pages_to_read]
 
             # Read from this tiff file
             if len(file_indices) > 0: # maybe we don't read anything in this file
@@ -372,8 +373,8 @@ class BaseScan5(BaseScan):
 
         # Check each dimension is in bounds
         max_dimensions = self.shape
-        for i, (index, max_dimension) in enumerate(zip(full_key, max_dimensions)):
-            utils.check_index_is_in_bounds(i, index, max_dimension)
+        for i, (index, dim_size) in enumerate(zip(full_key, max_dimensions)):
+            utils.check_index_is_in_bounds(i, index, dim_size)
 
         # Get slices/scanning_depths, channels and frames as lists
         slice_list = utils.listify_index(full_key[0], self.num_scanning_depths)
@@ -391,9 +392,12 @@ class BaseScan5(BaseScan):
         item = pages[:, full_key[1], full_key[2], :, :]
 
         # If original index was an integer, delete that axis (as in numpy indexing)
-        int_indices = [i for i, index in enumerate(full_key) if isinstance(index, int)]
-        int_indices = filter(lambda index: index not in [1, 2], int_indices) # ignore y, x which are applied as int already
-        item = np.squeeze(item, axis=tuple(int_indices))
+        num_dims_squeezed_in_yx = sum(isinstance(index, int) for index in full_key[1:3])
+        squeeze_dims = []
+        if isinstance(full_key[0], int): squeeze_dims.append(0)
+        if isinstance(full_key[3], int): squeeze_dims.append(3 - num_dims_squeezed_in_yx)
+        if isinstance(full_key[4], int): squeeze_dims.append(4 - num_dims_squeezed_in_yx)
+        item = np.squeeze(item, axis=tuple(squeeze_dims))
 
         return item
 
@@ -652,7 +656,7 @@ class ScanMultiROI(BaseScan):
             # item[i] = pages[i, ys, xs]
 
         # If original index was an integer, delete that axis  (as in numpy indexing)
-        int_indices = [i for i, index in enumerate(full_key) if isinstance(index, int)]
-        item = np.squeeze(item, axis=tuple(int_indices))
+        squeeze_dims = [i for i, index in enumerate(full_key) if isinstance(index, int)]
+        item = np.squeeze(item, axis=tuple(squeeze_dims))
 
         return item

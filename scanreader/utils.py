@@ -104,7 +104,7 @@ def listify_index(index, dim_size):
             dim_size)  # transforms Nones and negative ints to valid slice
         index_as_list = list(range(start, stop, step))
     else:
-        error_msg = ('index {} is not either integer, slice or array/list/tuple of '
+        error_msg = ('index {} is not integer, slice or array/list/tuple of '
                      'integers'.format(index))
         raise TypeError(error_msg)
 
