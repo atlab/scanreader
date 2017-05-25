@@ -134,6 +134,7 @@ class Field:
             For now, all fields have the same width so all xslices are slice(None).
         output_yslices: list of slices. Where to paste this field in the output field.
         output_xslices: list of slices. Where to paste this field in the output field.
+        roi_id: index of the ROI to which this field belong.
         
     Example:
         output_field[output_yslice, output_xslice] = page[yslice, xslice]
@@ -153,7 +154,7 @@ class Field:
     """
     def __init__(self, height=None, width=None, depth=None, y=None, x=None,
                  height_in_degrees=None, width_in_degrees=None, yslices=None,
-                 xslices=None, output_yslices=None, output_xslices=None):
+                 xslices=None, output_yslices=None, output_xslices=None, roi_id=None):
         self.height = height
         self.width = width
         self.depth = depth
@@ -165,6 +166,7 @@ class Field:
         self.xslices = xslices
         self.output_yslices = output_yslices
         self.output_xslices = output_xslices
+        self.roi_id = roi_id
 
     @property
     def has_contiguous_subfields(self):
@@ -176,7 +178,7 @@ class Field:
                      x=self.x, height_in_degrees=self.height_in_degrees,
                      width_in_degrees=self.width_in_degrees, yslices=self.yslices,
                      xslices=self.xslices, output_yslices=self.output_yslices,
-                     output_xslices=self.output_xslices)
+                     output_xslices=self.output_xslices, roi_id=self.roi_id)
 
     def _type_of_contiguity(self, field2):
         """ Compute how field 2 is contiguous to this one. 
