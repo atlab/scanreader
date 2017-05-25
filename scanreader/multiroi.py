@@ -48,13 +48,13 @@ class ROI:
             size_in_x, size_in_y = scanfield_info['sizeXY']
 
             # Create scanfield
-            new_scanfield = Field(height=height, width=width, depth=scanfield_depth,
-                                  y=ycenter, x=xcenter, height_in_degrees=size_in_y,
-                                  width_in_degrees=size_in_x)
+            new_scanfield = Scanfield(height=height, width=width, depth=scanfield_depth,
+                                      y=ycenter, x=xcenter, height_in_degrees=size_in_y,
+                                      width_in_degrees=size_in_x)
             scanfields.append(new_scanfield)
 
         # Sort them by depth (to ease interpolation)
-        scanfields = sorted(scanfields, key=lambda field: field.depth)
+        scanfields = sorted(scanfields, key=lambda scanfield: scanfield.depth)
 
         return scanfields
 
@@ -78,10 +78,10 @@ class ROI:
         if self.is_discrete_plane_mode_on: # only check at each scanfield depth
             for scanfield in self.scanfields:
                 if scanning_depth == scanfield.depth:
-                    field = scanfield.copy()
+                    field = scanfield.as_field()
         else:
             if len(self.scanfields) == 1: # single scanfield extending from -inf to inf
-                field = self.scanfields[0].copy()
+                field = self.scanfields[0].as_field()
                 field.depth = round(scanning_depth)
 
             else: # interpolate between scanfields
@@ -119,9 +119,35 @@ class ROI:
         return field
 
 
-class Field:
-    """ Small container for field information. 
+class Scanfield:
+    """ Small container for scanfield information. Used to define ROIs.
     
+    Attributes:
+        height: height of the field in pixels.
+        width: width of the field in pixels.
+        depth: depth at which this field was recorded (in microns relative to absolute z).
+        y, x: Coordinates of the center of the field in the scan (in scan angle degrees).
+        height_in_degrees: height of the field in degrees of the scan angle.
+        width_in_degrees: width of the field in degrees of the scan angle.
+    """
+    def __init__(self, height=None, width=None, depth=None, y=None, x=None,
+                 height_in_degrees=None, width_in_degrees=None):
+        self.height = height
+        self.width = width
+        self.depth = depth
+        self.y = y
+        self.x = x
+        self.height_in_degrees = height_in_degrees
+        self.width_in_degrees = width_in_degrees
+
+    def as_field(self):
+        return Field(height=self.height, width=self.width, depth=self.depth, y=self.y,
+                     x=self.x, height_in_degrees=self.height_in_degrees,
+                     width_in_degrees=self.width_in_degrees)
+
+class Field(Scanfield):
+    """ Two-dimensional scanning plane. An extension of scanfield with some functionality.
+     
     Attributes:
         height: height of the field in pixels.
         width: width of the field in pixels.
@@ -172,13 +198,6 @@ class Field:
     def has_contiguous_subfields(self):
         """ Whether field is formed by many contiguous subfields. """
         return len(self.xslices) > 1
-
-    def copy(self):
-        return Field(height=self.height, width=self.width, depth=self.depth, y=self.y,
-                     x=self.x, height_in_degrees=self.height_in_degrees,
-                     width_in_degrees=self.width_in_degrees, yslices=self.yslices,
-                     xslices=self.xslices, output_yslices=self.output_yslices,
-                     output_xslices=self.output_xslices, roi_id=self.roi_id)
 
     def _type_of_contiguity(self, field2):
         """ Compute how field 2 is contiguous to this one. 
