@@ -241,17 +241,6 @@ class BaseScan():
     def __array__(self):
         return self[:]
 
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        if self._field_for_iter < self.num_fields:
-            next_field = self[self._field_for_iter]
-            self._field_for_iter += 1
-            return next_field
-        else:
-            raise StopIteration
-
     def __str__(self):
         msg = '{}\n{}\n{}'.format(type(self), '*' * 80, self.header, '*' * 80)
         return msg
@@ -263,6 +252,23 @@ class BaseScan():
         """ Index scans by field, y, x, channels, frames. Supports integer, slice and 
         array/tuple/list of integers as indices."""
         raise NotImplementedError('Subclasses of BaseScan must implement this method')
+
+    def __iter__(self):
+        class ScanIterator:
+            """ Iterator for Scan objects."""
+            def __init__(self, scan):
+                self.scan = scan
+                self.next_field = 0
+
+            def __next__(self):
+                if self.next_field < self.scan.num_fields:
+                    field = self.scan[self.next_field]
+                    self.next_field += 1
+                else:
+                    raise StopIteration
+                return field
+
+        return ScanIterator(self)
 
     def _read_pages(self, slice_list ,channel_list, frame_list):
         """ Reads the tiff pages with the content of each slice, channel, frame 
@@ -325,11 +331,13 @@ class BaseScan():
 
         return pages
 
+
 class ScanLegacy(BaseScan):
     """Scan versions 4 and below. Not implemented. """
 
     def __init__(self):
         raise NotImplementedError('Legacy scans not supported')
+
 
 class BaseScan5(BaseScan):
     """ScanImage 5 scans. 
