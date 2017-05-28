@@ -21,10 +21,11 @@ print(scan.num_fields)
 
 for field in scan:
 	# process field (4-d array: [y, x, channels, frames])
+    del field  # free memory before next iteration
 
-x = scan[:] # 5-d array [fields, y, x, channel, frames]
-y = scan[:2, :, :, 0, -1000:] # 5-d array: last 1000 frames of first 2 fields on the first channel
-z = scan[1] # 4-d array: the second field (over all channels and time)
+x = scan[:]  # 5-d array [fields, y, x, channel, frames]
+y = scan[:2, :, :, 0, -1000:]  # 5-d array: last 1000 frames of first 2 fields on the first channel
+z = scan[1]  # 4-d array: the second field (over all channels and time)
 
 scan = scanreader.read_scan('/data/my_scan_*.tif', dtype=np.float32, join_contiguous=True)
 # scan loaded as np.float32 (default is np.int16) and adjacent fields at same depth will be joined.
