@@ -55,7 +55,6 @@ class BaseScan():
         self.dtype = None
         self._tiff_files = None
         self.header = ''
-        self._field_for_iter = 0
 
     @property
     def tiff_files(self):
@@ -273,11 +272,10 @@ class BaseScan():
     def _read_pages(self, slice_list, channel_list, frame_list, yslice=slice(None),
                     xslice=slice(None)):
         """ Reads the tiff pages with the content of each slice, channel, frame 
-        combination. Optionally slices the output using yslice and xslice.
+        combination and slices them in the y, x dimension.
 
         Each tiff page holds a single depth/channel/frame combination. Channels change 
         first, slices/depths change second and timeframes change last.
-
         Example:
             For two channels, three slices, two frames.
             Page:       0   1   2   3   4   5   6   7   8   9   10  11
@@ -289,15 +287,23 @@ class BaseScan():
             slice_list: List of integers. Slices to read.
             channel_list: List of integers. Channels to read.
             frame_list: List of integers. Frames to read
+            yslice: Slice object. How to slice the pages in the y axis.
+            xslice: Slice object. How to slice the pages in the x axis.
 
         Returns:
-            A 5-D array (num_slices, page_height, page_width, num_channels, num_frames).
+            A 5-D array (num_slices, output_height, output_width, num_channels, num_frames).
                 Required pages reshaped to have slice, channel and frame as different
                 dimensions. Channel, slice and frame order received in the input lists are 
                 respected; for instance, if slice_list = [1, 0, 2, 0], then the first 
-                dimension will have four slices: [1, 0, 2, 0]. 
+                dimension will have four slices: [1, 0, 2, 0].
+                
+        Note: 
+            We use slices in y, x for memory efficiency, If lists were passed another copy
+            of the pages will be needed coming up to 3x the amount of data we actually 
+            want to read (the output array, the read pages and the list-sliced pages). 
+            Slices limit this to 2x (output array and read pages which are sliced in place).
         """
-        # Compute pages to load from tiff files (a bit dirty but does the trick)
+        # Compute pages to load from tiff files
         slice_step = self.num_channels
         frame_step = self.num_channels * self.num_scanning_depths
         pages_to_read = []
@@ -307,14 +313,12 @@ class BaseScan():
                     new_page = frame * frame_step + slice * slice_step + channel
                     pages_to_read.append(new_page)
 
-        # Calculate output height and width
-        yindices = yslice.indices(self._page_height) # (start, stop, step)
-        output_height = yindices[1] - yindices[0]
-        xindices = xslice.indices(self._page_width) # (start, stop, step)
-        output_width = xindices[1] - xindices[0]
+        # Compute output dimensions
+        out_height = len(utils.listify_index(yslice, self._page_height))
+        out_width= len(utils.listify_index(xslice, self._page_width))
 
         # Read pages
-        pages = np.empty([len(pages_to_read), output_height, output_width], dtype=self.dtype)
+        pages = np.empty([len(pages_to_read), out_height, out_width], dtype=self.dtype)
         start_page = 0
         for tiff_file in self.tiff_files:
 
@@ -325,16 +329,14 @@ class BaseScan():
             file_indices = [page - start_page for page in pages_in_file]
             global_indices = [is_page_in_file(page) for page in pages_to_read]
 
-            # Read from this tiff file
-            if len(file_indices) > 0:  # maybe we don't read anything in this file
+            # Read from this tiff file (if needed)
+            if len(file_indices) > 0:
                 # this line looks a bit ugly but is memory efficient. Do not separate
                 pages[global_indices] = tiff_file.asarray(key=file_indices)[..., yslice, xslice]
             start_page += len(tiff_file)
 
-
-        # Reshape the pages into slices, y, x, channels, frames
-        new_shape = (len(frame_list), len(slice_list), len(channel_list), output_height,
-                     output_width)
+        # Reshape the pages into (slices, y, x, channels, frames)
+        new_shape = [len(frame_list), len(slice_list), len(channel_list), out_height, out_width]
         pages = pages.reshape(new_shape).transpose([1, 3, 4, 2, 0])
 
         return pages
@@ -392,7 +394,7 @@ class BaseScan5(BaseScan):
         for i, (index, dim_size) in enumerate(zip(full_key, max_dimensions)):
             utils.check_index_is_in_bounds(i, index, dim_size)
 
-        # Get slices/scanning_depths, channels and frames as lists
+        # Get fields, channels and frames as lists
         field_list = utils.listify_index(full_key[0], self.num_fields)
         y_list = utils.listify_index(full_key[1], self.image_height)
         x_list = utils.listify_index(full_key[2], self.image_width)
@@ -406,15 +408,18 @@ class BaseScan5(BaseScan):
         # Read the required pages
         pages = self._read_pages(field_list, channel_list, frame_list)
 
-        # Index on y, x using the original key (usually slices) for memory efficiency
-        item = pages[:, full_key[1], full_key[2], :, :]
+        # Index in y, x using the original key (usually slices) for memory efficiency.
+        if isinstance(full_key[1], list) and isinstance(full_key[2], list):
+            # Our behaviour for lists is to take the submatrix defined by those indices.
+            ys = [[y] for y in y_list] # ys as nested lists does the trick
+            item = pages[:, ys, x_list, :, :]
+        else:
+            item = pages[:, full_key[1], full_key[2], :, :]
+            item = item.reshape(len(field_list), len(y_list), len(x_list), len(channel_list),
+                                len(frame_list)) # put back any dropped dimension
 
         # If original index was an integer, delete that axis (as in numpy indexing)
-        num_dims_squeezed_in_yx = sum(isinstance(index, int) for index in full_key[1:3])
-        squeeze_dims = []
-        if isinstance(full_key[0], int): squeeze_dims.append(0)
-        if isinstance(full_key[3], int): squeeze_dims.append(3 - num_dims_squeezed_in_yx)
-        if isinstance(full_key[4], int): squeeze_dims.append(4 - num_dims_squeezed_in_yx)
+        squeeze_dims = [i for i, index in enumerate(full_key) if isinstance(index, int)]
         item = np.squeeze(item, axis=tuple(squeeze_dims))
 
         return item
@@ -491,6 +496,10 @@ class ScanMultiROI(BaseScan):
         return [field.roi_id for field in self.fields]
 
     @property
+    def field_slices(self):
+        return [field.slice_id for field in self.fields]
+
+    @property
     def _fly_to_seconds(self):
         match = re.search(r'hScan2D\.flytoTimePerScanfield = (?P<fly_to_seconds>.*)',
                           self.header)
@@ -544,7 +553,7 @@ class ScanMultiROI(BaseScan):
     def _create_fields(self):
         """ Go over each slice depth and each roi generating the scanned fields. """
         fields = []
-        for scanning_depth in self.scanning_depths:
+        for slice_id, scanning_depth in enumerate(self.scanning_depths):
             starting_line = 0
             for roi_id, roi in enumerate(self.rois):
                 new_field = roi.get_field_at(scanning_depth)
@@ -565,8 +574,9 @@ class ScanMultiROI(BaseScan):
                     new_field.output_yslices = [slice(0, new_field.height)]
                     new_field.output_xslices = [slice(0, new_field.width)]
 
-                    # Set roi id
+                    # Set roi and slice id
                     new_field.roi_id = roi_id
+                    new_field.slice_id = slice_id
 
                     # Compute next starting y
                     starting_line += new_field.height + self.num_fly_to_lines
@@ -608,11 +618,6 @@ class ScanMultiROI(BaseScan):
                         two_fields_were_joined = True
                         break
 
-    def field_to_slice(self, field_id):
-        """ Given a field id return the corresponding slice id."""
-        field_depth =  self.fields[field_id].depth
-        return self.scanning_depths.index(field_depth)
-
     def __getitem__(self, key):
         # Fill key to size 5 (raises IndexError if more than 5)
         full_key = utils.fill_key(key, num_dimensions=5)
@@ -648,21 +653,19 @@ class ScanMultiROI(BaseScan):
         if not all(len(x_list) == len(x_lists[0]) for x_list in x_lists):
             raise FieldDimensionMismatch('Image widths for all fields do not match')
 
-        # Over each field, read the required pages and slice in y, x
-        output_shape = (len(field_list), len(y_lists[0]), len(x_lists[0]),
-                        len(channel_list), len(frame_list))
-        item = np.empty(output_shape, dtype=self.dtype)
+        # Over each field, read required pages and slice
+        item = np.empty([len(field_list), len(y_lists[0]), len(x_lists[0]),
+                        len(channel_list), len(frame_list)], dtype=self.dtype)
         for i, (field_id, y_list, x_list) in enumerate(zip(field_list, y_lists, x_lists)):
             field = self.fields[field_id]
-            slice_id = self.field_to_slice(field_id)
 
             # Over each subfield in field (only one for non-contiguous fields)
-            slices = zip(field.yslices, field.xslices, field.output_yslices,
-                         field.output_xslices)
+            slices = zip(field.yslices, field.xslices, field.output_yslices, field.output_xslices)
             for yslice, xslice, output_yslice, output_xslice in slices:
 
-                # Read the required pages
-                pages = self._read_pages([slice_id], channel_list, frame_list, yslice, xslice)
+                # Read the required pages (and slice out the subfield)
+                pages = self._read_pages([field.slice_id], channel_list, frame_list,
+                                         yslice, xslice)
 
                 # Get x, y indices that need to be accessed in this subfield
                 y_range = range(output_yslice.start, output_yslice.stop)
@@ -673,10 +676,10 @@ class ScanMultiROI(BaseScan):
                 output_xs = [index for index, x in enumerate(x_list) if x in x_range]
                 # ys as nested lists are needed for numpy to slice them correctly
 
-                # Slice pages
+                # Index pages in y, x
                 item[i, output_ys, output_xs] = pages[0, ys, xs]
 
-        # If original index was an integer, delete that axis  (as in numpy indexing)
+        # If original index was an integer, delete that axis (as in numpy indexing)
         squeeze_dims = [i for i, index in enumerate(full_key) if isinstance(index, int)]
         item = np.squeeze(item, axis=tuple(squeeze_dims))
 
