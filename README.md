@@ -20,7 +20,7 @@ print(scan.num_channels)
 print(scan.num_fields)
 
 for field in scan:
-	# process field (4-d array: [y, x, channels, frames])
+    # process field (4-d array: [y, x, channels, frames])
     del field  # free memory before next iteration
 
 x = scan[:]  # 5-d array [fields, y, x, channel, frames]

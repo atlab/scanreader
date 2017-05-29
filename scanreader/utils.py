@@ -100,8 +100,7 @@ def listify_index(index, dim_size):
     elif isinstance(index, (list, tuple, np.ndarray)):
         index_as_list = [x if x >= 0 else (dim_size + x) for x in index]
     elif isinstance(index, slice):
-        start, stop, step = index.indices(
-            dim_size)  # transforms Nones and negative ints to valid slice
+        start, stop, step = index.indices(dim_size)  # transforms Nones and negative ints to valid slice
         index_as_list = list(range(start, stop, step))
     else:
         error_msg = ('index {} is not integer, slice or array/list/tuple of '

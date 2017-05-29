@@ -160,7 +160,8 @@ class Field(Scanfield):
             For now, all fields have the same width so all xslices are slice(None).
         output_yslices: list of slices. Where to paste this field in the output field.
         output_xslices: list of slices. Where to paste this field in the output field.
-        roi_id: index of the ROI to which this field belong.
+        roi_id: index of the ROI in the scan to which this field belongs.
+        slice_id: index of the slice in the scan to which this field belongs.
         
     Example:
         output_field[output_yslice, output_xslice] = page[yslice, xslice]
@@ -180,7 +181,8 @@ class Field(Scanfield):
     """
     def __init__(self, height=None, width=None, depth=None, y=None, x=None,
                  height_in_degrees=None, width_in_degrees=None, yslices=None,
-                 xslices=None, output_yslices=None, output_xslices=None, roi_id=None):
+                 xslices=None, output_yslices=None, output_xslices=None, roi_id=None,
+                 slice_id=None):
         self.height = height
         self.width = width
         self.depth = depth
@@ -193,6 +195,7 @@ class Field(Scanfield):
         self.output_yslices = output_yslices
         self.output_xslices = output_xslices
         self.roi_id = roi_id
+        self.slice_id = slice_id
 
     @property
     def has_contiguous_subfields(self):
