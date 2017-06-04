@@ -1,5 +1,5 @@
 """
-ScanImage scans. Each version handles things a little differently. Scan objects are 
+ScanImage scans. Each version handles things a little differently. Scan objects are
 usually instantiated by a call to scanreader.read_scan().
 
 Hierarchy:
@@ -22,28 +22,28 @@ from .exceptions import FieldDimensionMismatch
 
 class BaseScan():
     """ Properties and methods shared among all scan versions.
-    
+
     Scan objects are a collection of recording fields: rectangular planes at a given x, y,
-    z position in the scan recorded in a number of channels during a preset amount of 
+    z position in the scan recorded in a number of channels during a preset amount of
     time. All fields have the same number of channels and number of frames.
     Scan objects are:
         indexable: scan[field, y, x, channel, frame] works as long as the fields' spatial
             dimensions (y, x) match.
         iterable: 'for field in scan:' iterates over all fields (4-d array) in the scan.
-        
+
     Examples:
         scan.version                ScanImage version of the scan.
-        scan[:, :, :3, :, :1000]    5-d numpy array with the first 1000 frames of the 
+        scan[:, :, :3, :, :1000]    5-d numpy array with the first 1000 frames of the
             first 3 fields (if x, y dimensions match).
         for field in scan:          generates 4-d numpy arrays ([y, x, channels, frames]).
-        
+
     Note:
         We use frames as in video frames, i.e., number of timesteps the scan was recorded.
         ScanImage uses frames to refer to slices/scanning depths in the scan.
     """
     """
     Interface rules:
-        If it (method or property) is shared among all subclasses it should be here, 
+        If it (method or property) is shared among all subclasses it should be here,
             either implemented or as an abstract method. Even if private (e.g. _num_pages)
         If one subclass needs to overwrite it, then erase it here and implement them in
             the subclasses (this applies for now that I only have two subclasses). If code
@@ -221,7 +221,7 @@ class BaseScan():
 
     def read_data(self, filenames, dtype):
         """ Set self.header, self.filenames and self.dtype. Data is read lazily when needed.
-        
+
         Args:
             filenames: List of strings. Tiff filenames.
             dtype: Data type of the output array.
@@ -248,7 +248,7 @@ class BaseScan():
         return 0 if self.num_fields is None else self.num_fields
 
     def __getitem__(self, key):
-        """ Index scans by field, y, x, channels, frames. Supports integer, slice and 
+        """ Index scans by field, y, x, channels, frames. Supports integer, slice and
         array/tuple/list of integers as indices."""
         raise NotImplementedError('Subclasses of BaseScan must implement this method')
 
@@ -271,10 +271,10 @@ class BaseScan():
 
     def _read_pages(self, slice_list, channel_list, frame_list, yslice=slice(None),
                     xslice=slice(None)):
-        """ Reads the tiff pages with the content of each slice, channel, frame 
+        """ Reads the tiff pages with the content of each slice, channel, frame
         combination and slices them in the y, x dimension.
 
-        Each tiff page holds a single depth/channel/frame combination. Channels change 
+        Each tiff page holds a single depth/channel/frame combination. Channels change
         first, slices/depths change second and timeframes change last.
         Example:
             For two channels, three slices, two frames.
@@ -293,14 +293,14 @@ class BaseScan():
         Returns:
             A 5-D array (num_slices, output_height, output_width, num_channels, num_frames).
                 Required pages reshaped to have slice, channel and frame as different
-                dimensions. Channel, slice and frame order received in the input lists are 
-                respected; for instance, if slice_list = [1, 0, 2, 0], then the first 
+                dimensions. Channel, slice and frame order received in the input lists are
+                respected; for instance, if slice_list = [1, 0, 2, 0], then the first
                 dimension will have four slices: [1, 0, 2, 0].
-                
-        Note: 
+
+        Note:
             We use slices in y, x for memory efficiency, If lists were passed another copy
-            of the pages will be needed coming up to 3x the amount of data we actually 
-            want to read (the output array, the read pages and the list-sliced pages). 
+            of the pages will be needed coming up to 3x the amount of data we actually
+            want to read (the output array, the read pages and the list-sliced pages).
             Slices limit this to 2x (output array and read pages which are sliced in place).
         """
         # Compute pages to load from tiff files
@@ -350,7 +350,7 @@ class ScanLegacy(BaseScan):
 
 
 class BaseScan5(BaseScan):
-    """ScanImage 5 scans. 
+    """ScanImage 5 scans.
     Only one field per scanning depth and all fields have the same y, x dimensions."""
 
     @property
@@ -458,7 +458,7 @@ class Scan2016b(Scan5Point2):
 
 class ScanMultiROI(BaseScan):
     """An extension of ScanImage v5 that manages multiROI data (output from mesoscope).
-     
+
      Attributes:
          join_contiguous: A bool. Whether contiguous fields are joined into one.
          rois: List of ROI objects (defined in multiroi.py)
@@ -508,7 +508,7 @@ class ScanMultiROI(BaseScan):
 
     @property
     def num_fly_to_lines(self):
-        """ Number of lines recorded in the tiff page while flying to a different field, 
+        """ Number of lines recorded in the tiff page while flying to a different field,
         i.e., distance between fields in the tiff page."""
         num_fly_to_lines = self._fly_to_seconds / self.seconds_per_line
         num_fly_to_lines = int(np.ceil(num_fly_to_lines))
@@ -543,11 +543,14 @@ class ScanMultiROI(BaseScan):
 
     def _create_rois(self):
         """Create scan rois from the configuration file. """
-        scanimage_metadata = self.tiff_files[0].scanimage_metadata
+        tiff_file = TiffFile(self.filenames[0], pages=[0])
+        scanimage_metadata = tiff_file.scanimage_metadata
+        tiff_file.close()
+
         roi_infos = scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
         roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
-
         rois = [ROI(roi_info) for roi_info in roi_infos]
+
         return rois
 
     def _create_fields(self):
@@ -588,16 +591,16 @@ class ScanMultiROI(BaseScan):
 
     def _join_contiguous_fields(self):
         """ In each scanning depth, join fields that are contiguous.
-        
-        Fields are considered contiguous if they appear next to each other and have the 
-        same size in their touching axis. Process is iterative: it tries to join each 
+
+        Fields are considered contiguous if they appear next to each other and have the
+        same size in their touching axis. Process is iterative: it tries to join each
         field with the remaining ones (checked in order); at the first union it will break
         and restart the process at the first field. When two fields are joined, it deletes
-        the one appearing last and modifies info such as field height, field width and 
-        slices in the one appearing first. 
-        
-        Any rectangular area in the scan formed by the union of two or more fields which 
-        have been joined will be treated as a single field after this operation. 
+        the one appearing last and modifies info such as field height, field width and
+        slices in the one appearing first.
+
+        Any rectangular area in the scan formed by the union of two or more fields which
+        have been joined will be treated as a single field after this operation.
         """
         for scanning_depth in self.scanning_depths:
             two_fields_were_joined = True
