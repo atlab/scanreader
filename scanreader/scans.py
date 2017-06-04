@@ -544,13 +544,11 @@ class ScanMultiROI(BaseScan):
     def _create_rois(self):
         """Create scan rois from the configuration file. """
         tiff_file = TiffFile(self.filenames[0], pages=[0])
-        scanimage_metadata = tiff_file.scanimage_metadata
+        roi_infos = tiff_file.scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
+        roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
         tiff_file.close()
 
-        roi_infos = scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
-        roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
         rois = [ROI(roi_info) for roi_info in roi_infos]
-
         return rois
 
     def _create_fields(self):

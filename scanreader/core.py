@@ -1,4 +1,4 @@
-""" 
+"""
 Reader for ScanImage 5 scans (including multiROI).
 
 Example:
@@ -21,10 +21,10 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     Args:
         pathnames: String or list of strings. Pathname(s) or pathname pattern(s) to read.
         dtype: Data-type. Data type of the output array.
-        join_contiguous: Boolean. For multiROI scans (2016b and beyond) it will join 
+        join_contiguous: Boolean. For multiROI scans (2016b and beyond) it will join
             contiguous scanfields in the same depth. No effect in non-multiROI scans. See
             help of ScanMultiROI._join_contiguous_fields for details.
-    
+
     Returns:
         A Scan object (subclass of BaseScan) with metadata and data. See Readme for details.
     """
@@ -62,10 +62,10 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
 
 def expand_wildcard(wildcard):
     """ Expands a list of pathname patterns to form a sorted list of absolute filenames.
-    
+
     Args:
         wildcard: String or list of strings. Pathname pattern(s) to be extended with glob.
-        
+
     Returns:
         A list of string. Absolute filenames.
     """
@@ -90,13 +90,13 @@ def expand_wildcard(wildcard):
     return sorted_filenames
 
 def get_scanimage_version(info):
-    """ Looks for the ScanImage version in the tiff file headers. 
-    
+    """ Looks for the ScanImage version in the tiff file headers.
+
     Args:
         info: A string. All headers from tiff tags.
-        
+
     Returns:
-        A string. ScanImage version        
+        A string. ScanImage version
     """
     pattern = re.compile(r"SI.?\.VERSION_MAJOR = '(?P<version>.*)'")
     match = re.search(pattern, info)
@@ -109,10 +109,10 @@ def get_scanimage_version(info):
 
 def is_scan_multiROI(info):
     """Looks whether the scan is multiROI in the tiff file headers.
-    
+
     Args:
         info: A string. All headers from tiff tags.
-        
+
     Returns:
         A bool. Whether scan is multiroi or not.
     """
