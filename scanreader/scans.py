@@ -227,9 +227,8 @@ class BaseScan():
             dtype: Data type of the output array.
         """
         # Set header (used to read ScanImage metadata information).
-        tiff_file = TiffFile(filenames[0], pages=[0])
-        self.header = tiff_file.info()
-        tiff_file.close()
+        with TiffFile(filenames[0], pages=[0]) as tiff_file:
+            self.header = tiff_file.info()
 
         # Set dtype of readed data
         self.dtype=dtype
@@ -543,11 +542,10 @@ class ScanMultiROI(BaseScan):
 
     def _create_rois(self):
         """Create scan rois from the configuration file. """
-        tiff_file = TiffFile(self.filenames[0], pages=[0])
-        roi_infos = tiff_file.scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
-        roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
-        tiff_file.close()
+        with TiffFile(self.filenames[0], pages=[0]) as tiff_file:
+            roi_infos = tiff_file.scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
 
+        roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
         rois = [ROI(roi_info) for roi_info in roi_infos]
         return rois
 
