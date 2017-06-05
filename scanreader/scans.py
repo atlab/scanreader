@@ -475,28 +475,32 @@ class ScanMultiROI(BaseScan):
         return len(self.fields)
 
     @property
-    def field_depths(self):
-        return [field.depth for field in self.fields]
-
-    @property
-    def field_widths(self):
-        return [field.width for field in self.fields]
+    def num_rois(self):
+        return len(self.rois)
 
     @property
     def field_heights(self):
         return [field.height for field in self.fields]
 
     @property
-    def num_rois(self):
-        return len(self.rois)
+    def field_widths(self):
+        return [field.width for field in self.fields]
 
     @property
-    def field_rois(self):
-        return [field.roi_id for field in self.fields]
+    def field_depths(self):
+        return [field.depth for field in self.fields]
 
     @property
     def field_slices(self):
         return [field.slice_id for field in self.fields]
+
+    @property
+    def field_rois(self):
+        return [field.roi_ids for field in self.fields]
+
+    @property
+    def field_masks(self):
+        return [field.roi_mask for field in self.fields]
 
     @property
     def _fly_to_seconds(self):
@@ -573,9 +577,9 @@ class ScanMultiROI(BaseScan):
                     new_field.output_yslices = [slice(0, new_field.height)]
                     new_field.output_xslices = [slice(0, new_field.width)]
 
-                    # Set roi and slice id
-                    new_field.roi_id = roi_id
+                    # Set slice and roi id
                     new_field.slice_id = slice_id
+                    new_field.roi_ids = [roi_id]
 
                     # Compute next starting y
                     starting_line += new_field.height + self.num_fly_to_lines
