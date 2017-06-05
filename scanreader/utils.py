@@ -42,18 +42,21 @@ def check_index_type(axis, index):
 
 
 def _index_has_valid_type(index):
-    if isinstance(index, (int, slice)): # integer or slice
+    if np.issubdtype(type(index), int): # integer
         return True
-    if isinstance(index, (list, tuple)) and all(type(x) == int for x in index):  # list or tuple
+    if isinstance(index, slice): # slice
         return True
-    if (isinstance(index, np.ndarray) and np.issubdtype(index.dtype, np.integer) and
+    if (isinstance(index, (list, tuple)) and
+        all(np.issubdtype(type(x), int) for x in index)):  # list or tuple
+        return True
+    if (isinstance(index, np.ndarray) and np.issubdtype(index.dtype, int) and
         index.ndim == 1):  # array
         return True
 
     return False
 
 def check_index_is_in_bounds(axis, index, dim_size):
-    """ Check that an index is in bounds for the given dimension size. By python indexing 
+    """ Check that an index is in bounds for the given dimension size. By python indexing
     rules, anything from -dim_size to dim_size-1 is valid.
 
     Args:
@@ -63,7 +66,7 @@ def check_index_is_in_bounds(axis, index, dim_size):
 
     Raises:
         TypeError: If index is not either integer, slice, or array.
-        IndexError: If index is out of bounds for the specified axis. 
+        IndexError: If index is out of bounds for the specified axis.
     """
     if not _is_index_in_bounds(index, dim_size):
         error_msg = ('index {} is out of bounds for axis {} with size '
@@ -71,7 +74,7 @@ def check_index_is_in_bounds(axis, index, dim_size):
         raise IndexError(error_msg)
 
 def _is_index_in_bounds(index, dim_size):
-    if isinstance(index, int):
+    if np.issubdtype(type(index), int):
         return (index in range(-dim_size, dim_size))
     elif isinstance(index, (list, tuple, np.ndarray)):
         return all(x in range(-dim_size, dim_size) for x in index)
@@ -95,7 +98,7 @@ def listify_index(index, dim_size):
     Raises:
         TypeError: If index is not either integer, slice, or array.
     """
-    if isinstance(index, int):
+    if np.issubdtype(type(index), int):
         index_as_list = [index] if index >= 0 else [dim_size + index]
     elif isinstance(index, (list, tuple, np.ndarray)):
         index_as_list = [x if x >= 0 else (dim_size + x) for x in index]
