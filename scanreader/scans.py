@@ -418,7 +418,7 @@ class BaseScan5(BaseScan):
                                 len(frame_list)) # put back any dropped dimension
 
         # If original index was an integer, delete that axis (as in numpy indexing)
-        squeeze_dims = [i for i, index in enumerate(full_key) if isinstance(index, int)]
+        squeeze_dims = [i for i, index in enumerate(full_key) if np.issubdtype(type(index), int)]
         item = np.squeeze(item, axis=tuple(squeeze_dims))
 
         return item
@@ -679,7 +679,7 @@ class ScanMultiROI(BaseScan):
                 item[i, output_ys, output_xs] = pages[0, ys, xs]
 
         # If original index was an integer, delete that axis (as in numpy indexing)
-        squeeze_dims = [i for i, index in enumerate(full_key) if isinstance(index, int)]
+        squeeze_dims = [i for i, index in enumerate(full_key) if np.issubdtype(type(index), int)]
         item = np.squeeze(item, axis=tuple(squeeze_dims))
 
         return item
