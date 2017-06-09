@@ -204,6 +204,15 @@ class BaseScan():
         return scanner_frequency
 
     @property
+    def motor_position_at_zero(self):
+        """ Motor position (x, y and z in microns) at ScanImage's (0, 0) point.
+        For non-multiroi scans, (0, 0) is in the center of the FOV.
+        """
+        match = re.search(r'hMotors\.motorPosition = (?P<motor_position>.*)', self.header)
+        motor_position = matlabstr2py(match.group('motor_position'))[:3] if match else None
+        return motor_position
+
+    @property
     def _y_angle_scale_factor(self):
         """ Scan angles in y are scaled by this factor, shrinking the angle range."""
         match = re.search(r'hRoiManager\.scanAngleMultiplierSlow = (?P<angle_scaler>.*)',
