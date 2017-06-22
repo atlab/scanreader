@@ -44,7 +44,7 @@ class BaseScan():
     """
     Interface rules:
         If it (method or property) is shared among all subclasses it should be here,
-            either implemented or as an abstract method. Even if private (e.g. _num_pages)
+            either implemented or as an abstract method. Even if private (e.g. _page_height)
         If one subclass needs to overwrite it, then erase it here and implement them in
             the subclasses (this applies for now that I only have two subclasses). If code
             needs to be shared add it as a private method here.
@@ -104,11 +104,7 @@ class BaseScan():
         """ Each tiff page is an image at a given channel, scanning depth combination."""
         num_pages = sum([len(tiff_file) for tiff_file in self.tiff_files])
         num_frames = num_pages / (self.num_scanning_depths * self.num_channels)
-        if not num_frames.is_integer():
-            error_msg = ('total number of pages {} not divisible by num_scanning_depths '
-                         '* num_channels'.format(num_pages))
-            raise ValueError(error_msg)
-        return int(num_frames)
+        return int(num_frames) # discard last frame if incomplete
 
     @property
     def is_multiROI(self):
@@ -316,9 +312,9 @@ class BaseScan():
         frame_step = self.num_channels * self.num_scanning_depths
         pages_to_read = []
         for frame in frame_list:
-            for slice in slice_list:
+            for slice_ in slice_list:
                 for channel in channel_list:
-                    new_page = frame * frame_step + slice * slice_step + channel
+                    new_page = frame * frame_step + slice_ * slice_step + channel
                     pages_to_read.append(new_page)
 
         # Compute output dimensions
