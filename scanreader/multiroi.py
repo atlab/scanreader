@@ -162,6 +162,7 @@ class Field(Scanfield):
         output_xslices: list of slices. Where to paste this field in the output field.
         slice_id: index of the slice in the scan to which this field belongs.
         roi_ids: list of ROI indices to which each subfield belongs (one if single field).
+        offsets: list of masks with time offsets per pixel (seconds, one if single field).
 
     Example:
         output_field[output_yslice, output_xslice] = page[yslice, xslice]
@@ -182,7 +183,7 @@ class Field(Scanfield):
     def __init__(self, height=None, width=None, depth=None, y=None, x=None,
                  height_in_degrees=None, width_in_degrees=None, yslices=None,
                  xslices=None, output_yslices=None, output_xslices=None, slice_id=None,
-                 roi_ids=None):
+                 roi_ids=None, offsets=None):
         self.height = height
         self.width = width
         self.depth = depth
@@ -196,6 +197,7 @@ class Field(Scanfield):
         self.output_xslices = output_xslices
         self.slice_id = slice_id
         self.roi_ids = roi_ids
+        self.offsets = offsets
 
     @property
     def has_contiguous_subfields(self):
@@ -209,6 +211,15 @@ class Field(Scanfield):
         for roi_id, output_yslice, output_xslice in zip(self.roi_ids, self.output_yslices,
                                                         self.output_xslices):
             mask[output_yslice, output_xslice] = roi_id
+        return mask
+
+    @property
+    def offset_mask(self):
+        """ Mask of the size of the field. Each pixel shows its time offset in seconds."""
+        mask = np.full([self.height, self.width], -1, dtype=np.float32)
+        for offsets, output_yslice, output_xslice in zip(self.offsets, self.output_yslices,
+                                                        self.output_xslices):
+            mask[output_yslice, output_xslice] = offsets
         return mask
 
     def _type_of_contiguity(self, field2):
@@ -292,8 +303,9 @@ class Field(Scanfield):
         self.yslices = self.yslices + field2.yslices
         self.xslices = self.xslices + field2.xslices
 
-        # Append new roi_id
+        # Append roi ids and offsets
         self.roi_ids = self.roi_ids + field2.roi_ids
+        self.offsets = self.offsets + field2.offsets
 
 
 class Position:

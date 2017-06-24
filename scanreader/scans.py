@@ -145,7 +145,6 @@ class BaseScan():
     def field_depths(self):
         raise NotImplementedError('Subclasses of BaseScan must implement this property')
 
-
     # Properties from here on are not strictly necessary
     @property
     def fps(self):
@@ -223,6 +222,18 @@ class BaseScan():
                           self.header)
         x_angle_scaler = float(match.group('angle_scaler')) if match else None
         return x_angle_scaler
+
+    @property
+    def _num_fly_back_lines(self):
+        """ Lines/mirror cycles that it takes to move from one depth to the next."""
+        match = re.search(r'hScan2D\.flybackTimePerFrame = (?P<fly_back_seconds>.*)',
+                          self.header)
+        if match:
+            fly_back_seconds = float(match.group('fly_back_seconds'))
+            num_fly_back_lines = self._seconds_to_lines(fly_back_seconds)
+        else:
+            num_fly_back_lines = None
+        return num_fly_back_lines
 
     def read_data(self, filenames, dtype):
         """ Set self.header, self.filenames and self.dtype. Data is read lazily when needed.
@@ -345,17 +356,53 @@ class BaseScan():
 
         return pages
 
+    def _seconds_to_lines(self, seconds):
+        """ Compute how many lines would be scanned in the given amount of seconds."""
+        num_lines = int(np.ceil(seconds / self.seconds_per_line))
+        if self.is_bidirectional:
+            # scanning starts at one end of the image so num_lines needs to be even
+            num_lines += (num_lines % 2)
+
+        return num_lines
+
+    def _compute_offsets(self, field_height, start_line):
+        """ Computes the time offsets at which a given field was recorded.
+
+        Computes the time delay at which each pixel was recorded using the start of the
+        scan as zero. It first creates an image with the number of lines scanned until
+        that point and then uses self.seconds_per_line to  transform it into seconds.
+
+        :param int field_height: Height of the field.
+        :param int start_line: Line at which this field starts.
+
+        :returns: A field_height x page_width mask with time offsets in seconds.
+        """
+        # Compute offsets within a line (negligible if seconds_per_line is small)
+        max_angle = (np.pi / 2) * self.temporal_fill_fraction
+        line_angles = np.linspace(-max_angle, max_angle, self._page_width + 2)[1:-1]
+        line_offsets = (np.sin(line_angles) + 1) / 2
+
+        # Compute offsets for entire field
+        field_offsets = np.expand_dims(np.arange(0, field_height), -1) + line_offsets
+        if self.is_bidirectional: # odd lines scanned from left to right
+            field_offsets[1::2] = field_offsets[1::2] - line_offsets + (1 - line_offsets)
+
+        # Transform offsets from line counts to seconds
+        field_offsets = (field_offsets + start_line) * self.seconds_per_line
+
+        return field_offsets
+
 
 class ScanLegacy(BaseScan):
-    """Scan versions 4 and below. Not implemented. """
+    """ Scan versions 4 and below. Not implemented."""
 
     def __init__(self):
         raise NotImplementedError('Legacy scans not supported')
 
 
 class BaseScan5(BaseScan):
-    """ScanImage 5 scans.
-    Only one field per scanning depth and all fields have the same y, x dimensions."""
+    """ ScanImage 5 scans: one field per scanning depth and all fields have the same
+    height and width."""
 
     @property
     def num_fields(self):
@@ -436,22 +483,35 @@ class Scan5Point1(BaseScan5):
 
 class Scan5Point2(BaseScan5):
     """ ScanImage 5.2. Addition of FOV measures in microns."""
+
+    @ property
+    def field_offsets(self):
+        """ Seconds elapsed between start of frame scanning and each pixel."""
+        next_line = 0
+        field_offsets = []
+        for i in range(self.num_fields):
+            field_offsets.append(self._compute_offsets(self.image_height, next_line))
+            next_line += self.image_height + self._num_fly_back_lines
+        return field_offsets
+
     @property
     def image_height_in_microns(self):
         match = re.search(r'hRoiManager\.imagingFovUm = (?P<fov_corners>.*)', self.header)
-        image_height_in_microns = None
         if match:
             fov_corners = matlabstr2py(match.group('fov_corners'))
             image_height_in_microns = fov_corners[2][1] - fov_corners[1][1]  # y1-y0
+        else:
+            image_height_in_microns = None
         return image_height_in_microns
 
     @property
     def image_width_in_microns(self):
         match = re.search(r'hRoiManager\.imagingFovUm = (?P<fov_corners>.*)', self.header)
-        image_width_in_microns = None
         if match:
             fov_corners = matlabstr2py(match.group('fov_corners'))
             image_width_in_microns = fov_corners[1][0] - fov_corners[0][0] # x1-x0
+        else:
+            image_width_in_microns = None
         return image_width_in_microns
 
 
@@ -508,22 +568,8 @@ class ScanMultiROI(BaseScan):
         return [field.roi_mask for field in self.fields]
 
     @property
-    def _fly_to_seconds(self):
-        match = re.search(r'hScan2D\.flytoTimePerScanfield = (?P<fly_to_seconds>.*)',
-                          self.header)
-        fly_to_seconds = float(match.group('fly_to_seconds')) if match else None
-        return fly_to_seconds
-
-    @property
-    def num_fly_to_lines(self):
-        """ Number of lines recorded in the tiff page while flying to a different field,
-        i.e., distance between fields in the tiff page."""
-        num_fly_to_lines = self._fly_to_seconds / self.seconds_per_line
-        num_fly_to_lines = int(np.ceil(num_fly_to_lines))
-        if self.is_bidirectional:
-            # line scanning always starts at one end of the image so this has to be even
-            num_fly_to_lines += (num_fly_to_lines % 2)
-        return num_fly_to_lines
+    def field_offsets(self):
+        return [field.offset_mask for field in self.fields]
 
     @property
     def field_heights_in_microns(self):
@@ -534,6 +580,19 @@ class ScanMultiROI(BaseScan):
     def field_widths_in_microns(self):
         field_widths_in_degrees = [field.width_in_degrees for field in self.fields]
         return [self._degrees_to_microns(deg) for deg in field_widths_in_degrees]
+
+    @property
+    def _num_fly_to_lines(self):
+        """ Number of lines recorded in the tiff page while flying to a different field,
+        i.e., distance between fields in the tiff page."""
+        match = re.search(r'hScan2D\.flytoTimePerScanfield = (?P<fly_to_seconds>.*)',
+                          self.header)
+        if match:
+            fly_to_seconds = float(match.group('fly_to_seconds'))
+            num_fly_to_lines = self._seconds_to_lines(fly_to_seconds)
+        else:
+            num_fly_to_lines = None
+        return num_fly_to_lines
 
     def _degrees_to_microns(self, degrees):
         """ Convert scan angle degrees to microns using the objective resolution."""
@@ -561,20 +620,21 @@ class ScanMultiROI(BaseScan):
     def _create_fields(self):
         """ Go over each slice depth and each roi generating the scanned fields. """
         fields = []
+        previous_lines = 0
         for slice_id, scanning_depth in enumerate(self.scanning_depths):
-            starting_line = 0
+            next_line_in_page = 0 # each slice is one tiff page
             for roi_id, roi in enumerate(self.rois):
                 new_field = roi.get_field_at(scanning_depth)
 
                 if new_field is not None:
-                    if starting_line + new_field.height > self._page_height:
+                    if next_line_in_page + new_field.height > self._page_height:
                         error_msg = ('Overestimated number of fly to lines ({}) at '
-                                     'scanning depth {}'.format(self.num_fly_to_lines,
+                                     'scanning depth {}'.format(self._num_fly_to_lines,
                                                                 scanning_depth))
                         raise RuntimeError(error_msg)
 
                     # Set xslice and yslice (from where in the page to cut it)
-                    new_field.yslices = [slice(starting_line, starting_line
+                    new_field.yslices = [slice(next_line_in_page, next_line_in_page
                                                + new_field.height)]
                     new_field.xslices = [slice(0, new_field.width)]
 
@@ -586,11 +646,19 @@ class ScanMultiROI(BaseScan):
                     new_field.slice_id = slice_id
                     new_field.roi_ids = [roi_id]
 
+                    # Set timing offsets
+                    offsets = self._compute_offsets(new_field.height, previous_lines +
+                                                                      next_line_in_page)
+                    new_field.offsets = [offsets]
+
                     # Compute next starting y
-                    starting_line += new_field.height + self.num_fly_to_lines
+                    next_line_in_page += new_field.height + self._num_fly_to_lines
 
                     # Add field to fields
                     fields.append(new_field)
+
+            # Accumulate overall number of scanned lines
+            previous_lines += self._page_height + self._num_fly_back_lines
 
         return fields
 
