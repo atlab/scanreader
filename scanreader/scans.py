@@ -208,22 +208,6 @@ class BaseScan():
         return motor_position
 
     @property
-    def _y_angle_scale_factor(self):
-        """ Scan angles in y are scaled by this factor, shrinking the angle range."""
-        match = re.search(r'hRoiManager\.scanAngleMultiplierSlow = (?P<angle_scaler>.*)',
-                          self.header)
-        y_angle_scaler = float(match.group('angle_scaler')) if match else None
-        return y_angle_scaler
-
-    @property
-    def _x_angle_scale_factor(self):
-        """ Scan angles in x are scaled by this factor, shrinking the angle range."""
-        match = re.search(r'hRoiManager\.scanAngleMultiplierFast = (?P<angle_scaler>.*)',
-                          self.header)
-        x_angle_scaler = float(match.group('angle_scaler')) if match else None
-        return x_angle_scaler
-
-    @property
     def _num_fly_back_lines(self):
         """ Lines/mirror cycles that it takes to move from one depth to the next."""
         match = re.search(r'hScan2D\.flybackTimePerFrame = (?P<fly_back_seconds>.*)',
@@ -430,6 +414,22 @@ class BaseScan5(BaseScan):
         match = re.search(r'hRoiManager\.scanZoomFactor = (?P<zoom>.*)', self.header)
         zoom = float(match.group('zoom')) if match else None
         return zoom
+
+    @property
+    def _y_angle_scale_factor(self):
+        """ Scan angles in y are scaled by this factor, shrinking the angle range."""
+        match = re.search(r'hRoiManager\.scanAngleMultiplierSlow = (?P<angle_scaler>.*)',
+                          self.header)
+        y_angle_scaler = float(match.group('angle_scaler')) if match else None
+        return y_angle_scaler
+
+    @property
+    def _x_angle_scale_factor(self):
+        """ Scan angles in x are scaled by this factor, shrinking the angle range."""
+        match = re.search(r'hRoiManager\.scanAngleMultiplierFast = (?P<angle_scaler>.*)',
+                          self.header)
+        x_angle_scaler = float(match.group('angle_scaler')) if match else None
+        return x_angle_scaler
 
     def __getitem__(self, key):
         """ In non-multiROI, all fields have the same x, y dimensions. """
