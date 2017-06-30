@@ -181,12 +181,6 @@ class BaseScan():
         return num_requested_frames
 
     @property
-    def zstep_in_microns(self):
-        match = re.search(r'hStackManager\.stackZStepSize = (?P<zstep>.*)', self.header)
-        zstep_in_microns = float(match.group('zstep')) if match else None
-        return zstep_in_microns
-
-    @property
     def scanner_type(self):
         match = re.search(r"hScan2D\.scannerType = '(?P<scanner_type>.*)'", self.header)
         scanner_type = match.group('scanner_type') if match else None
