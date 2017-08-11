@@ -120,10 +120,15 @@ class BaseScan():
         return is_bidirectional
 
     @property
+    def scanner_frequency(self):
+        match = re.search(r'hScan2D\.scannerFrequency = (?P<scanner_freq>.*)', self.header)
+        scanner_frequency = float(match.group('scanner_freq')) if match else None
+        return scanner_frequency
+
+    @property
     def seconds_per_line(self):
-        match = re.search(r'hRoiManager\.linePeriod = (?P<secs_per_line>.*)', self.header)
-        seconds_per_line = float(match.group('secs_per_line')) if match else None
-        return seconds_per_line
+        scanner_period = 1 / self.scanner_frequency # time (secs) for mirror to return to initial position
+        return scanner_period / 2 if self.is_bidirectional else scanner_period
 
     @property
     def _page_height(self):
@@ -185,12 +190,6 @@ class BaseScan():
         match = re.search(r"hScan2D\.scannerType = '(?P<scanner_type>.*)'", self.header)
         scanner_type = match.group('scanner_type') if match else None
         return scanner_type
-
-    @property
-    def scanner_frequency(self):
-        match = re.search(r'hScan2D\.scannerFrequency = (?P<scanner_freq>.*)', self.header)
-        scanner_frequency = float(match.group('scanner_freq')) if match else None
-        return scanner_frequency
 
     @property
     def motor_position_at_zero(self):
@@ -608,6 +607,7 @@ class ScanMultiROI(BaseScan):
             roi_infos = tiff_file.scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
 
         roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
+        roi_infos = list(filter(lambda r: isinstance(r['zs'], (int, list)), roi_infos)) # discard empty/malformed ROIs
         rois = [ROI(roi_info) for roi_info in roi_infos]
         return rois
 
