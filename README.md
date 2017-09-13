@@ -30,6 +30,9 @@ z = scan[1]  # 4-d array: the second field (over all channels and time)
 scan = scanreader.read_scan('/data/my_scan_*.tif', dtype=np.float32, join_contiguous=True)
 # scan loaded as np.float32 (default is np.int16) and adjacent fields at same depth will be joined.
 ```
-Scan objects (returned by read_scan()) are iterable and indexable (as shown). Indexes can be integers, slice objects (:) or lists/tuples/arrays of integers. It should act like a numpy 5-d array---no boolean indexing, though.
+Scan objects (returned by `read_scan()`) are iterable and indexable (as shown). Indexes can be integers, slice objects (:) or lists/tuples/arrays of integers. It should act like a numpy 5-d array---no boolean indexing, though.
+
+#### Stacks
+Slow stacks record all frames in one scanning depth before moving to the next. To read stacks, use `scanreader.read_stack()` in place of `read_scan`.
 
 This reader is based on a previous [version](https://github.com/atlab/tiffreader) developed by Fabian Sinz.

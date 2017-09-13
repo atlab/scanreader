@@ -307,7 +307,7 @@ class BaseScan():
 
         # Compute output dimensions
         out_height = len(utils.listify_index(yslice, self._page_height))
-        out_width= len(utils.listify_index(xslice, self._page_width))
+        out_width = len(utils.listify_index(xslice, self._page_width))
 
         # Read pages
         pages = np.empty([len(pages_to_read), out_height, out_width], dtype=self.dtype)
