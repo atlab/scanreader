@@ -33,6 +33,6 @@ scan = scanreader.read_scan('/data/my_scan_*.tif', dtype=np.float32, join_contig
 Scan objects (returned by `read_scan()`) are iterable and indexable (as shown). Indexes can be integers, slice objects (:) or lists/tuples/arrays of integers. It should act like a numpy 5-d array---no boolean indexing, though.
 
 #### Stacks
-Slow stacks record all frames in one scanning depth before moving to the next. To read stacks, use `scanreader.read_stack()` in place of `read_scan`.
+Slow stacks record all frames in one scanning depth before moving to the next. To read stacks, use `read_stack()` in place of `read_scan()`.
 
 This reader is based on a previous [version](https://github.com/atlab/tiffreader) developed by Fabian Sinz.
