@@ -64,8 +64,8 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
 def read_stack(pathnames, dtype=np.int16, join_contiguous=False):
     """ Reads a ScanImage stack.
 
-    A stack is similar to a scan except that all frames for one slice are recorded first
-    before moving to the next slice.
+    Stacks are similar to scans except that we record all frames for a single scanning
+    depth before moving to the next.
 
     Args:
         pathnames: String or list of strings. Pathname(s) or pathname pattern(s) to read.

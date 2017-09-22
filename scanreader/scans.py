@@ -201,6 +201,12 @@ class BaseScan():
         return motor_position
 
     @property
+    def _initial_frame_number(self):
+        match = re.search(r'\sframeNumbers = (?P<frame_number>.*)', self.header)
+        initial_frame_number = int(match.group('frame_number')) if match else None
+        return initial_frame_number
+
+    @property
     def _num_fly_back_lines(self):
         """ Lines/mirror cycles that it takes to move from one depth to the next."""
         match = re.search(r'hScan2D\.flybackTimePerFrame = (?P<fly_back_seconds>.*)',
@@ -671,7 +677,7 @@ class ScanMultiROI(BaseScan):
         """
         for scanning_depth in self.scanning_depths:
             two_fields_were_joined = True
-            while(two_fields_were_joined): # repeat until no fields were joined
+            while two_fields_were_joined: # repeat until no fields were joined
                 two_fields_were_joined = False
 
                 fields = filter(lambda field: field.depth == scanning_depth, self.fields)
