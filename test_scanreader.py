@@ -21,8 +21,10 @@ scan_file_5_1_multifiles = [path.join(data_dir, 'scan_5_1_001.tif'), path.join(d
 scan_file_2016b_multiroi_multifiles = [path.join(data_dir, 'scan_2016b_multiroi_001.tif'), path.join(data_dir, 'scan_2016b_multiroi_002.tif')]
 scan_file_join_contiguous = scan_file_2016b_multiroi
 
-stack_file_5_1 = path.join(data_dir, 'stack_5_1_001.tif') # 60 slices, 2 channels
+stack_file_5_1 = path.join(data_dir, 'stack_5_1_001.tif') # 2 channels, 60 slices
+stack_file_2016b_multiroi = path.join(data_dir, 'stack_2016b_multiroi_001.tif') # 2 channels, 50 slices, 4 fields per slice
 stack_file_5_1_multifiles = [path.join(data_dir, 'stack_5_1_001.tif'), path.join(data_dir, 'stack_5_1_002.tif')] # second has 10 slices
+
 
 
 class ScanTest(TestCase):
@@ -151,7 +153,7 @@ class ScanTest(TestCase):
 
     def assertEqualShapeAndSum(self, array, expected_shape, expected_sum):
         self.assertEqual(array.shape, expected_shape)
-        self.assertEqual(array.sum(), expected_sum)
+        self.assertEqual(np.sum(array, dtype=int), expected_sum)
 
 
     def test_5_1(self):
@@ -384,6 +386,7 @@ class ScanTest(TestCase):
         self.assertEqual(scan.uses_fastZ, True)
         self.assertEqual(scan.num_requested_frames, 500)
         self.assertEqual(scan.scanner_type, 'Resonant')
+        self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
 
         self.assertEqual(scan.num_rois, 2)
         self.assertEqual(scan.field_heights, [500, 500, 500, 500, 500])
@@ -483,10 +486,42 @@ class StackTest(TestCase):
         self.assertEqual(scan.shape, (60, 512, 512, 2, 25))
         self.assertEqual(scan.zoom, 2.1)
 
+        # 2016b multiROI
+        scan = scanreader.read_stack(stack_file_2016b_multiroi)
+        self.assertEqual(scan.version, '2016b')
+        self.assertEqual(scan.num_fields, 204)
+        self.assertEqual(scan.num_channels, 2)
+        self.assertEqual(scan.num_frames, 10)
+        self.assertEqual(scan.num_scanning_depths, 51)
+        self.assertEqual(scan.scanning_depths, list(range(150, 99, -1)))
+        self.assertEqual(scan.field_depths, list(np.repeat(range(150, 99, -1), 4)))
+        self.assertEqual(scan.is_multiROI, True)
+        self.assertEqual(scan.is_bidirectional, True)
+        self.assertEqual(scan.scanner_frequency, 12039.1)
+        self.assertAlmostEqual(scan.seconds_per_line, 4.15312e-05)
+        self.assertEqual(scan.fps, 0.244914)
+        self.assertEqual(scan.spatial_fill_fraction, 0.9)
+        self.assertEqual(scan.temporal_fill_fraction, 0.712867)
+        self.assertEqual(scan.uses_fastZ, False)
+        self.assertEqual(scan.num_requested_frames, 10)
+        self.assertEqual(scan.scanner_type, 'Resonant')
+        self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
+
+        self.assertEqual(scan.num_rois, 4)
+        self.assertEqual(scan.field_heights, [360] * 204)
+        self.assertEqual(scan.field_widths, [120] * 204)
+        self.assertEqual(scan.field_slices, list(np.repeat(range(0, 51), 4)))
+        self.assertEqual(scan.field_rois, [[0], [1], [2], [3]] * 51)
+        roi_masks = [np.full([360, 120], i, dtype=np.int8) for i in range(4)]
+        for i in range(204): # for each field
+            self.assertEqual(scan.field_masks[i].tolist(), roi_masks[i % 4].tolist())
+            self.assertAlmostEqual(scan.field_heights_in_microns[i], 1800, places=4)
+            self.assertAlmostEqual(scan.field_widths_in_microns[i], 600, places=4)
+
 
     def assertEqualShapeAndSum(self, array, expected_shape, expected_sum):
         self.assertEqual(array.shape, expected_shape)
-        self.assertEqual(array.sum(), expected_sum)
+        self.assertEqual(np.sum(array, dtype=int), expected_sum)
 
 
     def test_5_1(self):
@@ -537,3 +572,27 @@ class StackTest(TestCase):
         self.assertEqualShapeAndSum(first_channel, (70, 512, 512, 25), 1832276046863)
         first_frame = scan[:, :, :, :, 0]
         self.assertEqualShapeAndSum(first_frame, (70, 512, 512, 2), 79887927681)
+
+    def test_2016b_multiroi(self):
+        scan = scanreader.read_stack(stack_file_2016b_multiroi)
+
+        # Test it is iterable
+        for i, field in enumerate(scan):
+            self.assertEqual(field.shape, (360, 120, 2, 10))
+        self.assertEqual(i, 203)
+
+        # Test it can be obtained as array
+        scan_as_array = np.array(scan)
+        self.assertEqualShapeAndSum(scan_as_array, (204, 360, 120, 2, 10), 30797502048)
+
+        # Test indexation
+        first_field = scan[0, :, :, :, :]
+        self.assertEqualShapeAndSum(first_field, (360, 120, 2, 10), 148674123)
+        first_row = scan[:, 0, :, :, :]
+        self.assertEqualShapeAndSum(first_row, (204, 120, 2, 10), 70350224)
+        first_column = scan[:, :, 0, :, :]
+        self.assertEqualShapeAndSum(first_column, (204, 360, 2, 10), 160588726)
+        first_channel = scan[:, :, :, 0, :]
+        self.assertEqualShapeAndSum(first_channel, (204, 360, 120, 10), 26825949131)
+        first_frame = scan[:, :, :, :, 0]
+        self.assertEqualShapeAndSum(first_frame, (204, 360, 120, 2), 2952050950)
