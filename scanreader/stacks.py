@@ -13,6 +13,7 @@ BaseStack (MRO: BaseStack, BaseScan)
     StackMultiRoi (MRO: StackMultiROI, ScanMultiROI, BaseStack, BaseScan)
 """
 import numpy as np
+import re
 
 from . import scans
 from . import utils
@@ -21,7 +22,7 @@ class BaseStack(scans.BaseScan):
     """ Properties and methods shared among all stack versions."""
     @property
     def num_frames(self):
-        return self.num_requested_frames
+        return int(self.num_requested_frames / self._num_averaged_frames)
 
     @property
     def num_scanning_depths(self):
@@ -37,6 +38,13 @@ class BaseStack(scans.BaseScan):
     @property
     def scanning_depths(self):
         return self.requested_scanning_depths[:self.num_scanning_depths]
+
+    @property
+    def _num_averaged_frames(self):
+        """ How many requested frames are averaged to form one saved frame. """
+        match = re.search(r'hScan2D\.logAverageFactor = (?P<num_avg_frames>.*)', self.header)
+        num_averaged_frames = int(match.group('num_avg_frames')) if match else None
+        return num_averaged_frames
 
     def _read_pages(self, slice_list, channel_list, frame_list, yslice=slice(None),
                     xslice=slice(None)):
