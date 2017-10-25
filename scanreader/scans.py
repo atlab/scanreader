@@ -120,9 +120,19 @@ class BaseScan():
         return is_bidirectional
 
     @property
+    def scanner_frequency(self):
+        match = re.search(r'hScan2D\.scannerFrequency = (?P<scanner_freq>.*)', self.header)
+        scanner_frequency = float(match.group('scanner_freq')) if match else None
+        return scanner_frequency
+
+    @property
     def seconds_per_line(self):
-        match = re.search(r'hRoiManager\.linePeriod = (?P<secs_per_line>.*)', self.header)
-        seconds_per_line = float(match.group('secs_per_line')) if match else None
+        if not np.isnan(self.scanner_frequency):
+            scanner_period = 1 / self.scanner_frequency # secs for mirror to return to initial position
+            seconds_per_line = scanner_period / 2 if self.is_bidirectional else scanner_period
+        else:
+            match = re.search(r'hRoiManager\.linePeriod = (?P<secs_per_line>.*)', self.header)
+            seconds_per_line = float(match.group('secs_per_line')) if match else None
         return seconds_per_line
 
     @property
@@ -151,12 +161,6 @@ class BaseScan():
         match = re.search(r'hRoiManager\.scanVolumeRate = (?P<fps>.*)',self.header)
         fps = float(match.group('fps')) if match else None
         return fps
-
-    @property
-    def scanner_frequency(self):
-        match = re.search(r'hScan2D\.scannerFrequency = (?P<scanner_freq>.*)', self.header)
-        scanner_frequency = float(match.group('scanner_freq')) if match else None
-        return scanner_frequency
 
     @property
     def spatial_fill_fraction(self):
