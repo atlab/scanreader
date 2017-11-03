@@ -14,7 +14,6 @@ import numpy as np
 import re
 from .exceptions import ScanImageVersionError, PathnameError
 from .scans import Scan5Point1,Scan5Point2, Scan2016b, ScanMultiROI
-from .stacks import Stack5Point1,Stack5Point2, Stack2016b, StackMultiROI
 
 def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     """ Reads a ScanImage scan.
@@ -60,54 +59,6 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     tiff_file.close()
 
     return scan
-
-def read_stack(pathnames, dtype=np.int16, join_contiguous=False):
-    """ Reads a ScanImage stack.
-
-    Stacks are similar to scans except that we record all frames for a single scanning
-    depth before moving to the next.
-
-    Args:
-        pathnames: String or list of strings. Pathname(s) or pathname pattern(s) to read.
-        dtype: Data-type. Data type of the output array.
-        join_contiguous: Boolean. For multiROI stacks (2016b and beyond) it will join
-            contiguous scanfields in the same depth. No effect in non-multiROI stacks.
-            See help of ScanMultiROI._join_contiguous_fields for details.
-
-    Returns:
-        A Stack object (subclass of BaseStack) with metadata and data. See Readme for details.
-    """
-    # Expand wildcards
-    filenames = expand_wildcard(pathnames)
-    if len(filenames) == 0:
-        error_msg = 'Pathname(s) {} do not match any files in disk.'.format(pathnames)
-        raise PathnameError(error_msg)
-
-    # Read version from one of the tiff files
-    tiff_file = TiffFile(filenames[0], pages=[0])
-    version = get_scanimage_version(tiff_file.info())
-
-    # Select the appropriate scan object
-    if version == '5.1':
-        stack = Stack5Point1()
-    elif version == '5.2':
-        stack = Stack5Point2()
-    elif version == '2016b':
-        if is_scan_multiROI(tiff_file.info()):
-            stack = StackMultiROI(join_contiguous=join_contiguous)
-        else:
-            stack = Stack2016b()
-    else:
-        error_msg = 'Sorry, ScanImage version {} is not supported'.format(version)
-        raise ScanImageVersionError(error_msg)
-
-    # Read metadata and data (lazy operation)
-    stack.read_data(filenames, dtype=dtype)
-
-    # Close tiff_file
-    tiff_file.close()
-
-    return stack
 
 def expand_wildcard(wildcard):
     """ Expands a list of pathname patterns to form a sorted list of absolute filenames.

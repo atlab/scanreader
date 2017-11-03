@@ -76,6 +76,21 @@ class BaseScan():
         return version
 
     @property
+    def is_slow_stack(self):
+        """ True if fastZ is disabled. All frames for one slice are recorded first before
+        moving to the next slice."""
+        match = re.search(r'hFastZ\.enable = (?P<uses_fastZ>.*)', self.header)
+        is_slow_stack = (match.group('uses_fastZ') in ['false', '0']) if match else None
+        return is_slow_stack
+
+    @property
+    def is_multiROI(self):
+        """Only True if mroiEnable exists (2016b and up) and is set to True."""
+        match = re.search(r'hRoiManager\.mroiEnable = (?P<is_multiROI>.)', self.header)
+        is_multiROI = (match.group('is_multiROI') == '1') if match else False
+        return is_multiROI
+
+    @property
     def num_channels(self):
         match = re.search(r'hChannels\.channelSave = (?P<channels>.*)', self.header)
         if match:
@@ -86,7 +101,7 @@ class BaseScan():
         return num_channels
 
     @property
-    def scanning_depths(self):
+    def requested_scanning_depths(self):
         match = re.search(r'hStackManager\.zs = (?P<zs>.*)', self.header)
         if match:
             zs = matlabstr2py(match.group('zs'))
@@ -97,21 +112,38 @@ class BaseScan():
 
     @property
     def num_scanning_depths(self):
-        return len(self.scanning_depths)
+        if self.is_slow_stack:
+            """ Number of scanning depths actually recorded in this stack."""
+            num_scanning_depths = self._num_pages / (self.num_channels * self.num_frames)
+            num_scanning_depths = int(num_scanning_depths) # discard last slice if incomplete
+        else:
+            num_scanning_depths = len(self.requested_scanning_depths)
+        return num_scanning_depths
+
+    @property
+    def scanning_depths(self):
+        return self.requested_scanning_depths[:self.num_scanning_depths]
+
+    @property
+    def num_requested_frames(self):
+        if self.is_slow_stack:
+             match = re.search(r'hStackManager\.framesPerSlice = (?P<num_frames>.*)',
+                              self.header)
+        else:
+            match = re.search(r'hFastZ\.numVolumes = (?P<num_frames>.*)', self.header)
+        num_requested_frames = int(match.group('num_frames')) if match else None
+        return num_requested_frames
 
     @property
     def num_frames(self):
         """ Each tiff page is an image at a given channel, scanning depth combination."""
-        num_pages = sum([len(tiff_file) for tiff_file in self.tiff_files])
-        num_frames = num_pages / (self.num_scanning_depths * self.num_channels)
-        return int(num_frames) # discard last frame if incomplete
-
-    @property
-    def is_multiROI(self):
-        """Only True if mroiEnable exists (2016b and up) and is set to True."""
-        match = re.search(r'hRoiManager\.mroiEnable = (?P<is_multiROI>.)', self.header)
-        is_multiROI = (match.group('is_multiROI') == '1') if match else False
-        return is_multiROI
+        if self.is_slow_stack:
+            num_frames = min(self.num_requested_frames / self._num_averaged_frames,
+                             self._num_pages / self.num_channels) # finished in the first slice
+        else:
+            num_frames = self._num_pages / (self.num_channels * self.num_scanning_depths)
+        num_frames = int(num_frames) # discard last frame if incomplete
+        return num_frames
 
     @property
     def is_bidirectional(self):
@@ -127,13 +159,18 @@ class BaseScan():
 
     @property
     def seconds_per_line(self):
-        if not np.isnan(self.scanner_frequency):
-            scanner_period = 1 / self.scanner_frequency # secs for mirror to return to initial position
-            seconds_per_line = scanner_period / 2 if self.is_bidirectional else scanner_period
-        else:
+        if np.isnan(self.scanner_frequency):
             match = re.search(r'hRoiManager\.linePeriod = (?P<secs_per_line>.*)', self.header)
             seconds_per_line = float(match.group('secs_per_line')) if match else None
+        else:
+            scanner_period = 1 / self.scanner_frequency # secs for mirror to return to initial position
+            seconds_per_line = scanner_period / 2 if self.is_bidirectional else scanner_period
         return seconds_per_line
+
+    @property
+    def _num_pages(self):
+        num_pages = sum([len(tiff_file) for tiff_file in self.tiff_files])
+        return num_pages
 
     @property
     def _page_height(self):
@@ -146,6 +183,13 @@ class BaseScan():
         match = re.search(r'image_width \([^)]*\) (?P<page_width>.*)', self.header)
         page_width = int(match.group('page_width')) if match else None
         return page_width
+
+    @property
+    def _num_averaged_frames(self):
+        """ How many requested frames are averaged to form one saved frame. """
+        match = re.search(r'hScan2D\.logAverageFactor = (?P<num_avg_frames>.*)', self.header)
+        num_averaged_frames = int(match.group('num_avg_frames')) if match else None
+        return num_averaged_frames
 
     @property
     def num_fields(self):
@@ -173,22 +217,6 @@ class BaseScan():
         match = re.search(r'hScan2D\.fillFractionTemporal = (?P<temporal_ff>.*)', self.header)
         temporal_fill_fraction = float(match.group('temporal_ff')) if match else None
         return temporal_fill_fraction
-
-    @property
-    def uses_fastZ(self):
-        match = re.search(r'hFastZ\.enable = (?P<uses_fastZ>.*)', self.header)
-        uses_fastZ = (match.group('uses_fastZ') in ['true', '1']) if match else None
-        return uses_fastZ
-
-    @property
-    def num_requested_frames(self):
-        if self.uses_fastZ:
-            match = re.search(r'hFastZ\.numVolumes = (?P<num_frames>.*)', self.header)
-        else:
-            match = re.search(r'hStackManager\.framesPerSlice = (?P<num_frames>.*)',
-                              self.header)
-        num_requested_frames = int(match.group('num_frames')) if match else None
-        return num_requested_frames
 
     @property
     def scanner_type(self):
@@ -277,14 +305,23 @@ class BaseScan():
         """ Reads the tiff pages with the content of each slice, channel, frame
         combination and slices them in the y, x dimension.
 
-        Each tiff page holds a single depth/channel/frame combination. Channels change
-        first, slices/depths change second and timeframes change last.
+        Each tiff page holds a single depth/channel/frame combination. For slow stacks,
+        channels change first, timeframes change second and slices/depths change last.
         Example:
             For two channels, three slices, two frames.
-            Page:       0   1   2   3   4   5   6   7   8   9   10  11
-            Channel:    0   1   0   1   0   1   0   1   0   1   0   1
-            Slice:      0   0   1   1   2   2   0   0   1   1   2   2
-            Frame:      0   0   0   0   0   0   1   1   1   1   1   1
+                Page:       0   1   2   3   4   5   6   7   8   9   10  11
+                Channel:    0   1   0   1   0   1   0   1   0   1   0   1
+                Frame:      0   0   1   1   2   2   0   0   1   1   2   2
+                Slice:      0   0   0   0   0   0   1   1   1   1   1   1
+
+        For scans, channels change first, slices/depths change second and timeframes
+        change last.
+        Example:
+            For two channels, three slices, two frames.
+                Page:       0   1   2   3   4   5   6   7   8   9   10  11
+                Channel:    0   1   0   1   0   1   0   1   0   1   0   1
+                Slice:      0   0   1   1   2   2   0   0   1   1   2   2
+                Frame:      0   0   0   0   0   0   1   1   1   1   1   1
 
         Args:
             slice_list: List of integers. Slices to read.
@@ -307,8 +344,12 @@ class BaseScan():
             Slices limit this to 2x (output array and read pages which are sliced in place).
         """
         # Compute pages to load from tiff files
-        slice_step = self.num_channels
-        frame_step = self.num_channels * self.num_scanning_depths
+        if self.is_slow_stack:
+            frame_step = self.num_channels
+            slice_step = self.num_channels * self.num_frames
+        else:
+            slice_step = self.num_channels
+            frame_step = self.num_channels * self.num_scanning_depths
         pages_to_read = []
         for frame in frame_list:
             for slice_ in slice_list:
@@ -420,6 +461,19 @@ class BaseScan5(BaseScan):
         return zoom
 
     @property
+    def field_offsets(self):
+        """ Seconds elapsed between start of frame scanning and each pixel."""
+        if self.is_slow_stack:
+            field_offsets = None
+        else:
+            next_line = 0
+            field_offsets = []
+            for i in range(self.num_fields):
+                field_offsets.append(self._compute_offsets(self.image_height, next_line))
+                next_line += self.image_height + self._num_fly_back_lines
+        return field_offsets
+
+    @property
     def _y_angle_scale_factor(self):
         """ Scan angles in y are scaled by this factor, shrinking the angle range."""
         match = re.search(r'hRoiManager\.scanAngleMultiplierSlow = (?P<angle_scaler>.*)',
@@ -487,16 +541,6 @@ class Scan5Point1(BaseScan5):
 
 class Scan5Point2(BaseScan5):
     """ ScanImage 5.2. Addition of FOV measures in microns."""
-
-    @ property
-    def field_offsets(self):
-        """ Seconds elapsed between start of frame scanning and each pixel."""
-        next_line = 0
-        field_offsets = []
-        for i in range(self.num_fields):
-            field_offsets.append(self._compute_offsets(self.image_height, next_line))
-            next_line += self.image_height + self._num_fly_back_lines
-        return field_offsets
 
     @property
     def image_height_in_microns(self):
@@ -573,7 +617,11 @@ class ScanMultiROI(BaseScan):
 
     @property
     def field_offsets(self):
-        return [field.offset_mask for field in self.fields]
+        if self.is_slow_stack:
+            field_offsets = None
+        else:
+            field_offsets = [field.offset_mask for field in self.fields]
+        return field_offsets
 
     @property
     def field_heights_in_microns(self):
