@@ -14,7 +14,6 @@ print('Extracted data directory:', data_dir)
 # These are big files so they are not available in Github
 scan_file_5_1 = path.join(data_dir, 'scan_5_1_001.tif') # 2 channels, 3 slices
 scan_file_5_2 = path.join(data_dir, 'scan_5_2.tif') # 2 channels, 3 slices
-scan_file_2016b = path.join(data_dir, 'scan_2016b.tif') # 1 channel, 1 slice, mroiEnable=false
 scan_file_2016b_multiroi = path.join(data_dir, 'scan_2016b_multiroi_001.tif') # all rois have same dimensions, 1 channel 5 slices
 scan_file_2016b_multiroi_hard = path.join(data_dir, 'scan_2016b_multiroi_hard.tif') # rois have diff dimensions and they are volumes, 2 channels, 3 slices, roi1 at depth1, roi1 and 2 at depth 2, roi 2 at depth 2, thus 4 fields
 scan_file_5_1_multifiles = [path.join(data_dir, 'scan_5_1_001.tif'), path.join(data_dir, 'scan_5_1_002.tif')] # second file has less pages
@@ -22,6 +21,7 @@ scan_file_2016b_multiroi_multifiles = [path.join(data_dir, 'scan_2016b_multiroi_
 scan_file_join_contiguous = scan_file_2016b_multiroi
 
 stack_file_5_1 = path.join(data_dir, 'stack_5_1_001.tif') # 2 channels, 60 slices
+stack_file_2016b = path.join(data_dir, 'stack_2016b.tif') # 1 channel, 1 slice, mroiEnable=false
 stack_file_2016b_multiroi = path.join(data_dir, 'stack_2016b_multiroi_001.tif') # 2 channels, 50 slices, 4 fields per slice
 stack_file_5_1_multifiles = [path.join(data_dir, 'stack_5_1_001.tif'), path.join(data_dir, 'stack_5_1_002.tif')] # second has 10 slices
 
@@ -52,87 +52,61 @@ class ScanTest(TestCase):
         self.assertEqual(expand_wildcard([path.join(data_dir, 'scan_2016b_multiroi_0*.tif'), path.join(data_dir, 'scan_5_1_0*.tif')]),
                          [scan_file_2016b_multiroi_multifiles[0], scan_file_2016b_multiroi_multifiles[1], scan_file_5_1_multifiles[0], scan_file_5_1_multifiles[1]])
 
-        # Fails nicely if not any of the above types
-        self.assertRaises(TypeError, lambda: scanreader.read_scan(None))
-
 
     def test_attributes(self):
 
         # 5.1
         scan = scanreader.read_scan(scan_file_5_1)
         self.assertEqual(scan.version, '5.1')
-        self.assertEqual(scan.num_fields, 3)
+        self.assertEqual(scan.is_slow_stack, False)
+        self.assertEqual(scan.is_multiROI, False)
         self.assertEqual(scan.num_channels, 2)
-        self.assertEqual(scan.num_frames, 1000)
+        self.assertEqual(scan.requested_scanning_depths, [-5, 10, 25])
         self.assertEqual(scan.num_scanning_depths, 3)
         self.assertEqual(scan.scanning_depths, [-5, 10, 25])
-        self.assertEqual(scan.field_depths, [-5, 10, 25])
-        self.assertEqual(scan.is_multiROI, False)
+        self.assertEqual(scan.num_requested_frames, 60500)
+        self.assertEqual(scan.num_frames, 1000)
         self.assertEqual(scan.is_bidirectional, True)
         self.assertEqual(scan.scanner_frequency, 7920.62)
         self.assertAlmostEqual(scan.seconds_per_line, 6.31264e-05)
+        self.assertEqual(scan.num_fields, 3)
+        self.assertEqual(scan.field_depths, [-5, 10, 25])
         self.assertEqual(scan.fps, 11.0467)
         self.assertEqual(scan.spatial_fill_fraction, 0.9)
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
-        self.assertEqual(scan.uses_fastZ, True)
-        self.assertEqual(scan.num_requested_frames, 60500)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [-1025, -495.5, -202.8])
+        for i, max_offset in enumerate([0.01615707, 0.03421122, 0.05226535]):
+            self.assertAlmostEqual(scan.field_offsets[i].max(), max_offset)
 
         self.assertEqual(scan.image_height, 256)
         self.assertEqual(scan.image_width, 256)
         self.assertEqual(scan.shape, (3, 256, 256, 2, 1000))
         self.assertEqual(scan.zoom, 1.8)
 
-        # 2016b
-        scan = scanreader.read_scan(scan_file_2016b)
-        self.assertEqual(scan.version, '2016b')
-        self.assertEqual(scan.num_fields, 1)
-        self.assertEqual(scan.num_channels, 1)
-        self.assertEqual(scan.num_frames, 200)
-        self.assertEqual(scan.num_scanning_depths, 1)
-        self.assertEqual(scan.scanning_depths, [0])
-        self.assertEqual(scan.field_depths, [0])
-        self.assertEqual(scan.is_multiROI, False)
-        self.assertEqual(scan.is_bidirectional, False)
-        self.assertEqual(scan.scanner_frequency, 7926.87)
-        self.assertAlmostEqual(scan.seconds_per_line, 0.000126153)
-        self.assertEqual(scan.fps, 30.0255)
-        self.assertEqual(scan.spatial_fill_fraction, 0.9)
-        self.assertEqual(scan.temporal_fill_fraction, 0.712867)
-        self.assertEqual(scan.uses_fastZ, False)
-        self.assertEqual(scan.num_requested_frames, 4000)
-        self.assertEqual(scan.scanner_type, 'Resonant')
-        self.assertEqual(scan.motor_position_at_zero, [1359.5, 46710.5, -5323])
-
-        self.assertEqual(scan.image_height, 256)
-        self.assertEqual(scan.image_width, 256)
-        self.assertEqual(scan.shape, (1, 256, 256, 1, 200))
-        self.assertEqual(scan.zoom, 1.9)
-        self.assertAlmostEqual(scan.field_offsets[0].max(), 0.032289, places=4)
-        self.assertEqual(scan.image_height_in_microns, 307.08)
-        self.assertEqual(scan.image_width_in_microns, 307.08)
-
         # 2016b multiROI
         scan = scanreader.read_scan(scan_file_2016b_multiroi_hard)
         self.assertEqual(scan.version, '2016b')
-        self.assertEqual(scan.num_fields, 4)
+        self.assertEqual(scan.is_slow_stack, False)
+        self.assertEqual(scan.is_multiROI, True)
         self.assertEqual(scan.num_channels, 2)
-        self.assertEqual(scan.num_frames, 10)
+        self.assertEqual(scan.requested_scanning_depths, [50, 100, 150])
         self.assertEqual(scan.num_scanning_depths, 3)
         self.assertEqual(scan.scanning_depths, [50, 100, 150])
-        self.assertEqual(scan.field_depths, [50, 100, 100, 150])
-        self.assertEqual(scan.is_multiROI, True)
+        self.assertEqual(scan.num_requested_frames, 10)
+        self.assertEqual(scan.num_frames, 10)
         self.assertEqual(scan.is_bidirectional, True)
         self.assertEqual(scan.scanner_frequency, 12045.5)
         self.assertAlmostEqual(scan.seconds_per_line, 4.15092e-05)
+        self.assertEqual(scan.num_fields, 4)
+        self.assertEqual(scan.field_depths, [50, 100, 100, 150])
         self.assertEqual(scan.fps, 5.00651)
         self.assertEqual(scan.spatial_fill_fraction, 0.9)
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
-        self.assertEqual(scan.uses_fastZ, True)
-        self.assertEqual(scan.num_requested_frames, 10)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
+        for i, max_offset in enumerate([0.03320531, 0.09978618, 0.12709929, 0.1544124]):
+            self.assertAlmostEqual(scan.field_offsets[i].max(), max_offset)
 
         self.assertEqual(scan.num_rois, 2)
         self.assertEqual(scan.field_heights, [800, 800, 512, 512])
@@ -141,12 +115,10 @@ class ScanTest(TestCase):
         self.assertEqual(scan.field_rois, [[0], [0], [1], [1]])
         roi_masks = [np.full([800, 512], 0, dtype=np.int8), np.full([800, 512], 0, dtype=np.int8),
                      np.full([512, 512], 1, dtype=np.int8), np.full([512, 512], 1, dtype=np.int8)]
-        max_offsets = [0.033205, 0.099786, 0.127099, 0.154412]
         heights_in_microns = [800, 800, 500, 613.21963]
         widths_in_microns = [400, 400, 400, 400]
         for i in range(4): # for each field
             self.assertEqual(scan.field_masks[i].tolist(), roi_masks[i].tolist())
-            self.assertAlmostEqual(scan.field_offsets[i].max(), max_offsets[i], places=4)
             self.assertAlmostEqual(scan.field_heights_in_microns[i], heights_in_microns[i], places=4)
             self.assertAlmostEqual(scan.field_widths_in_microns[i], widths_in_microns[i], places=4)
 
@@ -229,31 +201,6 @@ class ScanTest(TestCase):
         self.assertEqualShapeAndSum(first_channel, (3, 256, 256, 1500), 487380452100)
         first_frame = scan[:, :, :, :, 0]
         self.assertEqualShapeAndSum(first_frame, (3, 256, 256, 2), 337564522)
-
-
-    def test_2016b(self):
-        scan = scanreader.read_scan(scan_file_2016b)
-
-        # Test it is iterable
-        fields_sum = [-7855587]
-        for i, field in enumerate(scan):
-            self.assertEqualShapeAndSum(field, (256, 256, 1, 200), fields_sum[i])
-
-        # Test it can be obtained as array
-        scan_as_array = np.array(scan)
-        self.assertEqualShapeAndSum(scan_as_array, (1, 256, 256, 1, 200), -7855587)
-
-        # Test indexation
-        first_field = scan[0, :, :, :, :]
-        self.assertEqualShapeAndSum(first_field, (256, 256, 1, 200), -7855587)
-        first_row = scan[:, 0, :, :, :]
-        self.assertEqualShapeAndSum(first_row, (1, 256, 1, 200), -30452)
-        first_column = scan[:, :, 0, :, :]
-        self.assertEqualShapeAndSum(first_column, (1, 256, 1, 200), -31680)
-        first_channel = scan[:, :, :, 0, :]
-        self.assertEqualShapeAndSum(first_channel, (1, 256, 256, 200), -7855587)
-        first_frame = scan[:, :, :, :, 0]
-        self.assertEqualShapeAndSum(first_frame, (1, 256, 256, 1), -42389)
 
 
     def test_2016b_multiroi(self):
@@ -370,38 +317,38 @@ class ScanTest(TestCase):
 
         # Test attributes
         self.assertEqual(scan.version, '2016b')
-        self.assertEqual(scan.num_fields, 5)
+        self.assertEqual(scan.is_slow_stack, False)
+        self.assertEqual(scan.is_multiROI, True)
         self.assertEqual(scan.num_channels, 1)
-        self.assertEqual(scan.num_frames, 100)
+        self.assertEqual(scan.requested_scanning_depths, [-40, -20, 0, 20, 40])
         self.assertEqual(scan.num_scanning_depths, 5)
         self.assertEqual(scan.scanning_depths, [-40, -20, 0, 20, 40])
-        self.assertEqual(scan.field_depths, [-40, -20, 0, 20, 40])
-        self.assertEqual(scan.is_multiROI, True)
+        self.assertEqual(scan.num_requested_frames, 500)
+        self.assertEqual(scan.num_frames, 100)
         self.assertEqual(scan.is_bidirectional, True)
         self.assertEqual(scan.scanner_frequency, 12045.4)
         self.assertAlmostEqual(scan.seconds_per_line, 4.15097e-05)
+        self.assertEqual(scan.num_fields, 5)
+        self.assertEqual(scan.field_depths, [-40, -20, 0, 20, 40])
         self.assertEqual(scan.fps, 3.72926)
         self.assertEqual(scan.spatial_fill_fraction, 0.9)
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
-        self.assertEqual(scan.uses_fastZ, True)
-        self.assertEqual(scan.num_requested_frames, 500)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
+        for i, max_offset in enumerate([0.04756787, 0.1011983, 0.15482873, 0.20845917, 0.26208961]):
+            self.assertAlmostEqual(scan.field_offsets[i].max(), max_offset)
 
         self.assertEqual(scan.num_rois, 2)
         self.assertEqual(scan.field_heights, [500, 500, 500, 500, 500])
         self.assertEqual(scan.field_widths, [500, 500, 500, 500, 500])
         self.assertEqual(scan.field_slices, [0, 1, 2, 3, 4])
         self.assertEqual(scan.field_rois, [[0, 1], [0, 1], [0, 1], [0, 1], [0, 1]])
-        self.assertEqual(scan._num_fly_to_lines, 146)
         roi_mask = np.zeros([500, 500], dtype=np.int8)
         roi_mask[:, 250:] = 1
-        max_offsets = [0.047568, 0.101198, 0.154829, 0.208460, 0.262090]
         heights_in_microns = [1000, 1000, 1000, 1000, 1000]
         widths_in_microns = [1000, 1000, 1000, 1000, 1000]
         for i in range(5):
             self.assertEqual(scan.field_masks[i].tolist(), roi_mask.tolist())
-            self.assertAlmostEqual(scan.field_offsets[i].max(), max_offsets[i], places=4)
             self.assertAlmostEqual(scan.field_heights_in_microns[i], heights_in_microns[i], places=4)
             self.assertAlmostEqual(scan.field_widths_in_microns[i], widths_in_microns[i], places=4)
 
@@ -429,6 +376,10 @@ class ScanTest(TestCase):
 
     def test_exceptions(self):
         """ Tests some exceptions are raised correctly. """
+        # Wrong type and inexistent file
+        self.assertRaises(TypeError, lambda: scanreader.read_scan(None))
+        self.assertRaises(ScanReaderException, lambda: scanreader.read_scan('inexistent_file.tif'))
+
         scan = scanreader.read_scan(scan_file_5_1)
 
         # Too many dimensions
@@ -447,37 +398,34 @@ class ScanTest(TestCase):
         self.assertRaises(TypeError, lambda: scan[0.1])
         self.assertRaises(TypeError, lambda: scan[0, ...])
 
-        # No file on disk error
-        self.assertRaises(ScanReaderException, lambda: scanreader.read_scan('unexistent_file.tif'))
-
 
 
 
 
 class StackTest(TestCase):
-    """ Test stacks from different ScanImage versions. """
+    """ Test reading stacks from different ScanImage versions. """
 
     def test_attributes(self):
 
         # 5.1
-        scan = scanreader.read_stack(stack_file_5_1)
+        scan = scanreader.read_scan(stack_file_5_1)
         self.assertEqual(scan.version, '5.1')
-        self.assertEqual(scan.num_fields, 60)
-        self.assertEqual(scan.num_channels, 2)
-        self.assertEqual(scan.num_frames, 25)
-        self.assertEqual(scan.num_scanning_depths, 60)
-        self.assertEqual(scan.requested_scanning_depths, list(range(310)))
-        self.assertEqual(scan.scanning_depths, list(range(60)))
-        self.assertEqual(scan.field_depths, list(range(60)))
+        self.assertEqual(scan.is_slow_stack, True)
         self.assertEqual(scan.is_multiROI, False)
+        self.assertEqual(scan.num_channels, 2)
+        self.assertEqual(scan.requested_scanning_depths, list(range(310)))
+        self.assertEqual(scan.num_scanning_depths, 60)
+        self.assertEqual(scan.scanning_depths, list(range(60)))
+        self.assertEqual(scan.num_requested_frames, 25)
+        self.assertEqual(scan.num_frames, 25)
         self.assertEqual(scan.is_bidirectional, False)
         self.assertEqual(scan.scanner_frequency, 7919.95)
         self.assertAlmostEqual(scan.seconds_per_line, 0.000126264)
+        self.assertEqual(scan.num_fields, 60)
+        self.assertEqual(scan.field_depths, list(range(60)))
         self.assertEqual(scan.fps, 0.0486657)
         self.assertEqual(scan.spatial_fill_fraction, 0.9)
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
-        self.assertEqual(scan.uses_fastZ, False)
-        self.assertEqual(scan.num_requested_frames, 25)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [0.5, 0, -320.4])
 
@@ -486,24 +434,54 @@ class StackTest(TestCase):
         self.assertEqual(scan.shape, (60, 512, 512, 2, 25))
         self.assertEqual(scan.zoom, 2.1)
 
-        # 2016b multiROI
-        scan = scanreader.read_stack(stack_file_2016b_multiroi)
+        # 2016b
+        scan = scanreader.read_scan(stack_file_2016b)
         self.assertEqual(scan.version, '2016b')
-        self.assertEqual(scan.num_fields, 204)
+        self.assertEqual(scan.is_slow_stack, True)
+        self.assertEqual(scan.is_multiROI, False)
+        self.assertEqual(scan.num_channels, 1)
+        self.assertEqual(scan.requested_scanning_depths, [0])
+        self.assertEqual(scan.num_scanning_depths, 1)
+        self.assertEqual(scan.scanning_depths, [0])
+        self.assertEqual(scan.num_requested_frames, 4000)
+        self.assertEqual(scan.num_frames, 200)
+        self.assertEqual(scan.is_bidirectional, False)
+        self.assertEqual(scan.scanner_frequency, 7926.87)
+        self.assertAlmostEqual(scan.seconds_per_line, 0.000126153)
+        self.assertEqual(scan.num_fields, 1)
+        self.assertEqual(scan.field_depths, [0])
+        self.assertEqual(scan.fps, 30.0255)
+        self.assertEqual(scan.spatial_fill_fraction, 0.9)
+        self.assertEqual(scan.temporal_fill_fraction, 0.712867)
+        self.assertEqual(scan.scanner_type, 'Resonant')
+        self.assertEqual(scan.motor_position_at_zero, [1359.5, 46710.5, -5323])
+
+        self.assertEqual(scan.image_height, 256)
+        self.assertEqual(scan.image_width, 256)
+        self.assertEqual(scan.shape, (1, 256, 256, 1, 200))
+        self.assertEqual(scan.zoom, 1.9)
+        self.assertEqual(scan.image_height_in_microns, 307.08)
+        self.assertEqual(scan.image_width_in_microns, 307.08)
+
+        # 2016b multiROI
+        scan = scanreader.read_scan(stack_file_2016b_multiroi)
+        self.assertEqual(scan.version, '2016b')
+        self.assertEqual(scan.is_slow_stack, True)
+        self.assertEqual(scan.is_multiROI, True)
         self.assertEqual(scan.num_channels, 2)
-        self.assertEqual(scan.num_frames, 10)
+        self.assertEqual(scan.requested_scanning_depths, list(range(150, 99, -1)))
         self.assertEqual(scan.num_scanning_depths, 51)
         self.assertEqual(scan.scanning_depths, list(range(150, 99, -1)))
-        self.assertEqual(scan.field_depths, list(np.repeat(range(150, 99, -1), 4)))
-        self.assertEqual(scan.is_multiROI, True)
+        self.assertEqual(scan.num_requested_frames, 10)
+        self.assertEqual(scan.num_frames, 10)
         self.assertEqual(scan.is_bidirectional, True)
         self.assertEqual(scan.scanner_frequency, 12039.1)
         self.assertAlmostEqual(scan.seconds_per_line, 4.15312e-05)
+        self.assertEqual(scan.num_fields, 204)
+        self.assertEqual(scan.field_depths, list(np.repeat(range(150, 99, -1), 4)))
         self.assertEqual(scan.fps, 0.244914)
         self.assertEqual(scan.spatial_fill_fraction, 0.9)
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
-        self.assertEqual(scan.uses_fastZ, False)
-        self.assertEqual(scan.num_requested_frames, 10)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
 
@@ -525,7 +503,7 @@ class StackTest(TestCase):
 
 
     def test_5_1(self):
-        scan = scanreader.read_stack(stack_file_5_1)
+        scan = scanreader.read_scan(stack_file_5_1)
 
         # Test it is iterable
         for i, field in enumerate(scan):
@@ -550,7 +528,7 @@ class StackTest(TestCase):
 
 
     def test_5_1_multifile(self):
-        scan = scanreader.read_stack(stack_file_5_1_multifiles)
+        scan = scanreader.read_scan(stack_file_5_1_multifiles)
 
         # Test it is iterable
         for i, field in enumerate(scan):
@@ -573,8 +551,34 @@ class StackTest(TestCase):
         first_frame = scan[:, :, :, :, 0]
         self.assertEqualShapeAndSum(first_frame, (70, 512, 512, 2), 79887927681)
 
+
+    def test_2016b(self):
+        scan = scanreader.read_scan(stack_file_2016b)
+
+        # Test it is iterable
+        fields_sum = [-7855587]
+        for i, field in enumerate(scan):
+            self.assertEqualShapeAndSum(field, (256, 256, 1, 200), fields_sum[i])
+
+        # Test it can be obtained as array
+        scan_as_array = np.array(scan)
+        self.assertEqualShapeAndSum(scan_as_array, (1, 256, 256, 1, 200), -7855587)
+
+        # Test indexation
+        first_field = scan[0, :, :, :, :]
+        self.assertEqualShapeAndSum(first_field, (256, 256, 1, 200), -7855587)
+        first_row = scan[:, 0, :, :, :]
+        self.assertEqualShapeAndSum(first_row, (1, 256, 1, 200), -30452)
+        first_column = scan[:, :, 0, :, :]
+        self.assertEqualShapeAndSum(first_column, (1, 256, 1, 200), -31680)
+        first_channel = scan[:, :, :, 0, :]
+        self.assertEqualShapeAndSum(first_channel, (1, 256, 256, 200), -7855587)
+        first_frame = scan[:, :, :, :, 0]
+        self.assertEqualShapeAndSum(first_frame, (1, 256, 256, 1), -42389)
+
+
     def test_2016b_multiroi(self):
-        scan = scanreader.read_stack(stack_file_2016b_multiroi)
+        scan = scanreader.read_scan(stack_file_2016b_multiroi)
 
         # Test it is iterable
         for i, field in enumerate(scan):

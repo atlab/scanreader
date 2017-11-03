@@ -25,6 +25,7 @@ def fill_key(key, num_dimensions):
 
     return full_key
 
+
 def check_index_type(axis, index):
     """ Checks that index is an integer, slice or array/list/tuple of integers.
 
@@ -55,6 +56,7 @@ def _index_has_valid_type(index):
 
     return False
 
+
 def check_index_is_in_bounds(axis, index, dim_size):
     """ Check that an index is in bounds for the given dimension size. By python indexing
     rules, anything from -dim_size to dim_size-1 is valid.
@@ -73,6 +75,7 @@ def check_index_is_in_bounds(axis, index, dim_size):
                      '{}'.format(index, axis, dim_size))
         raise IndexError(error_msg)
 
+
 def _is_index_in_bounds(index, dim_size):
     if np.issubdtype(type(index), int):
         return (index in range(-dim_size, dim_size))
@@ -84,6 +87,7 @@ def _is_index_in_bounds(index, dim_size):
         error_msg = ('index {} is not either integer, slice or array/list/tuple of '
                      'integers'.format(index))
         raise TypeError(error_msg)
+
 
 def listify_index(index, dim_size):
     """ Generates the list representation of an index for the given dim_size.

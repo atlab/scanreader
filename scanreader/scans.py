@@ -234,6 +234,10 @@ class BaseScan():
         return motor_position
 
     @property
+    def field_offsets(self):
+        raise NotImplementedError('Subclasses of BaseScan must implement this property')
+
+    @property
     def _initial_frame_number(self):
         match = re.search(r'\sframeNumbers = (?P<frame_number>.*)', self.header)
         initial_frame_number = int(match.group('frame_number')) if match else None
