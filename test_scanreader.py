@@ -22,9 +22,8 @@ scan_file_join_contiguous = scan_file_2016b_multiroi
 
 stack_file_5_1 = path.join(data_dir, 'stack_5_1_001.tif') # 2 channels, 60 slices
 stack_file_2016b = path.join(data_dir, 'stack_2016b.tif') # 1 channel, 1 slice, mroiEnable=false
-stack_file_2016b_multiroi = path.join(data_dir, 'stack_2016b_multiroi_001.tif') # 2 channels, 50 slices, 4 fields per slice
 stack_file_5_1_multifiles = [path.join(data_dir, 'stack_5_1_001.tif'), path.join(data_dir, 'stack_5_1_002.tif')] # second has 10 slices
-
+stack_file_2016b_multiroi = path.join(data_dir, 'stack_2016b_multiroi_001.tif') # 2 channels, 50 slices, 4 fields per slice
 
 
 class ScanTest(TestCase):
