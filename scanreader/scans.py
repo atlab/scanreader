@@ -9,6 +9,7 @@ BaseScan
         Scan5Point1
         Scan5Point2
             Scan2016b
+            Scan2017a
     ScanMultiRoi
 """
 from tifffile import TiffFile
@@ -38,8 +39,9 @@ class BaseScan():
         for field in scan:          generates 4-d numpy arrays ([y, x, channels, frames]).
 
     Note:
-        We use frames as in video frames, i.e., number of timesteps the scan was recorded.
-        ScanImage uses frames to refer to slices/scanning depths in the scan.
+        We use the word 'frames' as in video frames, i.e., number of timesteps the scan
+        was recorded; ScanImage uses frames to refer to slices/scanning depths in the
+        scan.
     """
     """
     Interface rules:
@@ -186,7 +188,7 @@ class BaseScan():
 
     @property
     def _num_averaged_frames(self):
-        """ How many requested frames are averaged to form one saved frame. """
+        """ Number of requested frames are averaged to form one saved frame. """
         match = re.search(r'hScan2D\.logAverageFactor = (?P<num_avg_frames>.*)', self.header)
         num_averaged_frames = int(match.group('num_avg_frames')) if match else None
         return num_averaged_frames
@@ -571,6 +573,9 @@ class Scan2016b(Scan5Point2):
     """ ScanImage 2016b. Same as 5.2"""
     pass
 
+class Scan2017a(Scan5Point2):
+    """ ScanImage 2017a. Same as 5.2"""
+    pass
 
 class ScanMultiROI(BaseScan):
     """An extension of ScanImage v5 that manages multiROI data (output from mesoscope).
