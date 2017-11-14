@@ -257,6 +257,17 @@ class BaseScan():
             num_fly_back_lines = None
         return num_fly_back_lines
 
+    @property
+    def _num_lines_between_fields(self):
+        """ Lines/mirror cycles scanned from the start of one field to the start of the
+        next. """
+        if self.is_slow_stack:
+            num_lines_between_fields = ((self._page_height + self._num_fly_back_lines) *
+                                        (self.num_frames * self.num_averaged_frames))
+        else:
+            num_lines_between_fields = self._page_height + self._num_fly_back_lines
+        return num_lines_between_fields
+
     def read_data(self, filenames, dtype):
         """ Set self.header, self.filenames and self.dtype. Data is read lazily when needed.
 
@@ -469,14 +480,11 @@ class BaseScan5(BaseScan):
     @property
     def field_offsets(self):
         """ Seconds elapsed between start of frame scanning and each pixel."""
-        if self.is_slow_stack:
-            field_offsets = None
-        else:
-            next_line = 0
-            field_offsets = []
-            for i in range(self.num_fields):
-                field_offsets.append(self._compute_offsets(self.image_height, next_line))
-                next_line += self.image_height + self._num_fly_back_lines
+        next_line = 0
+        field_offsets = []
+        for i in range(self.num_fields):
+            field_offsets.append(self._compute_offsets(self.image_height, next_line))
+            next_line += self._num_lines_between_fields
         return field_offsets
 
     @property
@@ -720,7 +728,7 @@ class ScanMultiROI(BaseScan):
                     fields.append(new_field)
 
             # Accumulate overall number of scanned lines
-            previous_lines += self._page_height + self._num_fly_back_lines
+            previous_lines += self._num_lines_between_fields
 
         return fields
 
