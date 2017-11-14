@@ -263,7 +263,7 @@ class BaseScan():
         next. """
         if self.is_slow_stack:
             num_lines_between_fields = ((self._page_height + self._num_fly_back_lines) *
-                                        (self.num_frames * self.num_averaged_frames))
+                                        (self.num_frames * self._num_averaged_frames))
         else:
             num_lines_between_fields = self._page_height + self._num_fly_back_lines
         return num_lines_between_fields
