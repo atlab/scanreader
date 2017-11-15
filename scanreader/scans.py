@@ -634,11 +634,7 @@ class ScanMultiROI(BaseScan):
 
     @property
     def field_offsets(self):
-        if self.is_slow_stack:
-            field_offsets = None
-        else:
-            field_offsets = [field.offset_mask for field in self.fields]
-        return field_offsets
+        return [field.offset_mask for field in self.fields]
 
     @property
     def field_heights_in_microns(self):
