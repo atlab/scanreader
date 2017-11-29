@@ -585,6 +585,10 @@ class Scan2017a(Scan5Point2):
     """ ScanImage 2017a. Same as 5.2"""
     pass
 
+class Scan2017b(Scan5Point2):
+    """ ScanImage 2017b. Same as 5.2"""
+    pass
+
 class ScanMultiROI(BaseScan):
     """An extension of ScanImage v5 that manages multiROI data (output from mesoscope).
 
