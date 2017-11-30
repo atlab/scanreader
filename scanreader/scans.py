@@ -134,7 +134,8 @@ class BaseScan():
                               self.header)
         else:
             match = re.search(r'hFastZ\.numVolumes = (?P<num_frames>.*)', self.header)
-        num_requested_frames = int(match.group('num_frames')) if match else None
+        num_requested_frames = int(1e9 if match.group('num_frames')=='Inf' else
+                                   match.group('num_frames')) if match else None
         return num_requested_frames
 
     @property
