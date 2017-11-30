@@ -10,6 +10,7 @@ BaseScan
         Scan5Point2
             Scan2016b
             Scan2017a
+            Scan2017b
     ScanMultiRoi
 """
 from tifffile import TiffFile
