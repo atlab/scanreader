@@ -240,8 +240,11 @@ class BaseScan():
     def initial_secondary_z(self):
         """ Initial position in z (microns) of the secondary motor (if any)."""
         match = re.search(r'hMotors\.motorPosition = (?P<motor_position>.*)', self.header)
-        motor_position = matlabstr2py(match.group('motor_position')) if match else None
-        secondary_z = motor_position[3] if len(motor_position) > 3 else 0
+        if match:
+            motor_position = matlabstr2py(match.group('motor_position'))
+            secondary_z = motor_position[3] if len(motor_position) > 3 else None
+        else:
+            secondary_z = None
         return secondary_z
 
     @property

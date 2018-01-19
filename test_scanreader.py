@@ -75,6 +75,7 @@ class ScanTest(TestCase):
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [-1025, -495.5, -202.8])
+        self.assertEqual(scan.initial_secondary_z, 0)
         for i, max_offset in enumerate([0.01615707, 0.03421122, 0.05226535]):
             self.assertAlmostEqual(scan.field_offsets[i].max(), max_offset)
 
@@ -104,6 +105,7 @@ class ScanTest(TestCase):
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
+        self.assertEqual(scan.initial_secondary_z, None)
         for i, max_offset in enumerate([0.03320531, 0.09978618, 0.12709929, 0.1544124]):
             self.assertAlmostEqual(scan.field_offsets[i].max(), max_offset)
 
@@ -334,6 +336,7 @@ class ScanTest(TestCase):
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
+        self.assertEqual(scan.initial_secondary_z, None)
         for i, max_offset in enumerate([0.04756787, 0.1011983, 0.15482873, 0.20845917, 0.26208961]):
             self.assertAlmostEqual(scan.field_offsets[i].max(), max_offset)
 
@@ -427,6 +430,7 @@ class StackTest(TestCase):
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [0.5, 0, -320.4])
+        self.assertEqual(scan.initial_secondary_z, 0)
 
         self.assertEqual(scan.image_height, 512)
         self.assertEqual(scan.image_width, 512)
@@ -454,6 +458,7 @@ class StackTest(TestCase):
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [1359.5, 46710.5, -5323])
+        self.assertEqual(scan.initial_secondary_z, None)
 
         self.assertEqual(scan.image_height, 256)
         self.assertEqual(scan.image_width, 256)
@@ -483,6 +488,7 @@ class StackTest(TestCase):
         self.assertEqual(scan.temporal_fill_fraction, 0.712867)
         self.assertEqual(scan.scanner_type, 'Resonant')
         self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
+        self.assertEqual(scan.initial_secondary_z, None)
 
         self.assertEqual(scan.num_rois, 4)
         self.assertEqual(scan.field_heights, [360] * 204)
