@@ -82,8 +82,8 @@ class BaseScan():
     def is_slow_stack(self):
         """ True if fastZ is disabled. All frames for one slice are recorded first before
         moving to the next slice."""
-        match = re.search(r'hFastZ\.enable = (?P<uses_fastZ>.*)', self.header)
-        is_slow_stack = (match.group('uses_fastZ') in ['false', '0']) if match else None
+        match = re.search(r'hFastZ\.enable = (?P<is_slow>.*)', self.header)
+        is_slow_stack = (match.group('is_slow') in ['false', '0']) if match else None
         return is_slow_stack
 
     @property
@@ -248,10 +248,6 @@ class BaseScan():
         return secondary_z
 
     @property
-    def field_offsets(self):
-        raise NotImplementedError('Subclasses of BaseScan must implement this property')
-
-    @property
     def _initial_frame_number(self):
         match = re.search(r'\sframeNumbers = (?P<frame_number>.*)', self.header)
         initial_frame_number = int(match.group('frame_number')) if match else None
@@ -279,6 +275,14 @@ class BaseScan():
         else:
             num_lines_between_fields = self._page_height + self._num_fly_back_lines
         return num_lines_between_fields
+
+    @property
+    def is_slow_stack_with_fastZ(self):
+        raise NotImplementedError('Subclasses of BaseScan must implement this property')
+
+    @property
+    def field_offsets(self):
+        raise NotImplementedError('Subclasses of BaseScan must implement this property')
 
     def read_data(self, filenames, dtype):
         """ Set self.header, self.filenames and self.dtype. Data is read lazily when needed.
@@ -490,6 +494,13 @@ class BaseScan5(BaseScan):
         return zoom
 
     @property
+    def is_slow_stack_with_fastZ(self):
+        match = re.search(r'hMotors\.motorSecondMotorZEnable = (?P<uses_fastZ>.*)',
+                          self.header)
+        uses_fastZ = (match.group('uses_fastZ') in ['true', '1']) if match else None
+        return self.is_slow_stack and uses_fastZ
+
+    @property
     def field_offsets(self):
         """ Seconds elapsed between start of frame scanning and each pixel."""
         next_line = 0
@@ -589,19 +600,32 @@ class Scan5Point2(BaseScan5):
         return image_width_in_microns
 
 
-class Scan2016b(Scan5Point2):
-    """ ScanImage 2016b. Same as 5.2"""
+class BaseScan201xx(BaseScan):
+    """ Shared features among all newer scans. """
+    @property
+    def is_slow_stack_with_fastZ(self):
+        match = re.search(r'hStackManager\.slowStackWithFastZ = (?P<slow_with_fastZ>.*)',
+                          self.header)
+        slow_with_fastZ = (match.group('slow_with_fastZ') in ['true', '1']) if match else None
+        return slow_with_fastZ
+
+
+class Scan2016b(BaseScan201xx, Scan5Point2):
+    """ ScanImage 2016b"""
     pass
 
-class Scan2017a(Scan5Point2):
-    """ ScanImage 2017a. Same as 5.2"""
+
+class Scan2017a(BaseScan201xx, Scan5Point2):
+    """ ScanImage 2017a"""
     pass
 
-class Scan2017b(Scan5Point2):
-    """ ScanImage 2017b. Same as 5.2"""
+
+class Scan2017b(BaseScan201xx, Scan5Point2):
+    """ ScanImage 2017b"""
     pass
 
-class ScanMultiROI(BaseScan):
+
+class ScanMultiROI(BaseScan201xx):
     """An extension of ScanImage v5 that manages multiROI data (output from mesoscope).
 
      Attributes:

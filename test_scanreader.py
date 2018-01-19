@@ -83,6 +83,7 @@ class ScanTest(TestCase):
         self.assertEqual(scan.image_width, 256)
         self.assertEqual(scan.shape, (3, 256, 256, 2, 1000))
         self.assertEqual(scan.zoom, 1.8)
+        self.assertEqual(scan.is_slow_stack_with_fastZ, False)
 
         # 2016b multiROI
         scan = scanreader.read_scan(scan_file_2016b_multiroi_hard)
@@ -109,6 +110,7 @@ class ScanTest(TestCase):
         for i, max_offset in enumerate([0.03320531, 0.09978618, 0.12709929, 0.1544124]):
             self.assertAlmostEqual(scan.field_offsets[i].max(), max_offset)
 
+        self.assertEqual(scan.is_slow_stack_with_fastZ, False)
         self.assertEqual(scan.num_rois, 2)
         self.assertEqual(scan.field_heights, [800, 800, 512, 512])
         self.assertEqual(scan.field_widths, [512, 512, 512, 512])
@@ -340,6 +342,7 @@ class ScanTest(TestCase):
         for i, max_offset in enumerate([0.04756787, 0.1011983, 0.15482873, 0.20845917, 0.26208961]):
             self.assertAlmostEqual(scan.field_offsets[i].max(), max_offset)
 
+        self.assertEqual(scan.is_slow_stack_with_fastZ, False)
         self.assertEqual(scan.num_rois, 2)
         self.assertEqual(scan.field_heights, [500, 500, 500, 500, 500])
         self.assertEqual(scan.field_widths, [500, 500, 500, 500, 500])
@@ -436,6 +439,7 @@ class StackTest(TestCase):
         self.assertEqual(scan.image_width, 512)
         self.assertEqual(scan.shape, (60, 512, 512, 2, 25))
         self.assertEqual(scan.zoom, 2.1)
+        self.assertEqual(scan.is_slow_stack_with_fastZ, False)
 
         # 2016b
         scan = scanreader.read_scan(stack_file_2016b)
@@ -464,6 +468,7 @@ class StackTest(TestCase):
         self.assertEqual(scan.image_width, 256)
         self.assertEqual(scan.shape, (1, 256, 256, 1, 200))
         self.assertEqual(scan.zoom, 1.9)
+        self.assertEqual(scan.is_slow_stack_with_fastZ, False)
         self.assertEqual(scan.image_height_in_microns, 307.08)
         self.assertEqual(scan.image_width_in_microns, 307.08)
 
@@ -490,6 +495,7 @@ class StackTest(TestCase):
         self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
         self.assertEqual(scan.initial_secondary_z, None)
 
+        self.assertEqual(scan.is_slow_stack_with_fastZ, True)
         self.assertEqual(scan.num_rois, 4)
         self.assertEqual(scan.field_heights, [360] * 204)
         self.assertEqual(scan.field_widths, [120] * 204)
