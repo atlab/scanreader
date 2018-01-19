@@ -230,12 +230,19 @@ class BaseScan():
 
     @property
     def motor_position_at_zero(self):
-        """ Motor position (x, y and z in microns) at ScanImage's (0, 0) point.
-        For non-multiroi scans, (0, 0) is in the center of the FOV.
-        """
+        """ Motor position (x, y and z in microns) corresponding to the scan's (0, 0, 0)
+        point. For non-multiroi scans, (x=0, y=0) marks the center of the FOV."""
         match = re.search(r'hMotors\.motorPosition = (?P<motor_position>.*)', self.header)
         motor_position = matlabstr2py(match.group('motor_position'))[:3] if match else None
         return motor_position
+
+    @property
+    def initial_secondary_z(self):
+        """ Initial position in z (microns) of the secondary motor (if any)."""
+        match = re.search(r'hMotors\.motorPosition = (?P<motor_position>.*)', self.header)
+        motor_position = matlabstr2py(match.group('motor_position')) if match else None
+        secondary_z = motor_position[3] if len(motor_position) > 3 else 0
+        return secondary_z
 
     @property
     def field_offsets(self):
