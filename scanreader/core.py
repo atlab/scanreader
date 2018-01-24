@@ -35,8 +35,9 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
         raise PathnameError(error_msg)
 
     # Read version from one of the tiff files
-    tiff_file = TiffFile(filenames[0], pages=[0])
-    version = get_scanimage_version(tiff_file.info())
+    with TiffFile(filenames[0], movie=True) as tiff_file:
+        file_info = tiff_file.pages[0].description + '\n' + tiff_file.pages[0].software
+    version = get_scanimage_version(file_info)
 
     # Select the appropriate scan object
     if version == '5.1':
@@ -44,17 +45,17 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     elif version == '5.2':
         scan = Scan5Point2()
     elif version == '2016b':
-        if is_scan_multiROI(tiff_file.info()):
+        if is_scan_multiROI(file_info):
             scan = ScanMultiROI(join_contiguous=join_contiguous)
         else:
             scan = Scan2016b()
     elif version == '2017a':
-        if is_scan_multiROI(tiff_file.info()):
+        if is_scan_multiROI(file_info):
             scan = ScanMultiROI(join_contiguous=join_contiguous)
         else:
             scan = Scan2017a()
     elif version == '2017b':
-        if is_scan_multiROI(tiff_file.info()):
+        if is_scan_multiROI(file_info):
             scan = ScanMultiROI(join_contiguous=join_contiguous)
         else:
             scan = Scan2017b()
@@ -64,9 +65,6 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
 
     # Read metadata and data (lazy operation)
     scan.read_data(filenames, dtype=dtype)
-
-    # Close tiff_file
-    tiff_file.close()
 
     return scan
 

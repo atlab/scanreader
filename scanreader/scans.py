@@ -62,7 +62,7 @@ class BaseScan():
     @property
     def tiff_files(self):
         if self._tiff_files is None:
-            self._tiff_files = [TiffFile(filename) for filename in self.filenames]
+            self._tiff_files = [TiffFile(filename, movie=True) for filename in self.filenames]
         return self._tiff_files
 
     @tiff_files.deleter
@@ -173,20 +173,16 @@ class BaseScan():
 
     @property
     def _num_pages(self):
-        num_pages = sum([len(tiff_file) for tiff_file in self.tiff_files])
+        num_pages = sum([len(tiff_file.pages) for tiff_file in self.tiff_files])
         return num_pages
 
     @property
     def _page_height(self):
-        match = re.search(r'image_length \([^)]*\) (?P<page_height>.*)', self.header)
-        page_height = int(match.group('page_height')) if match else None
-        return page_height
+        return self.tiff_files[0].pages[0].imagelength
 
     @property
     def _page_width(self):
-        match = re.search(r'image_width \([^)]*\) (?P<page_width>.*)', self.header)
-        page_width = int(match.group('page_width')) if match else None
-        return page_width
+        return self.tiff_files[0].pages[0].imagewidth
 
     @property
     def _num_averaged_frames(self):
@@ -291,15 +287,10 @@ class BaseScan():
             filenames: List of strings. Tiff filenames.
             dtype: Data type of the output array.
         """
-        # Set header (used to read ScanImage metadata information).
-        with TiffFile(filenames[0], pages=[0]) as tiff_file:
-            self.header = tiff_file.info()
-
-        # Set dtype of readed data
-        self.dtype=dtype
-
-        # Set filenames
-        self.filenames = filenames
+        self.filenames = filenames # set filenames
+        self.dtype=dtype # set dtype of read data
+        self.header = '{}\n{}'.format(self.tiff_files[0].pages[0].description,
+                                      self.tiff_files[0].pages[0].software) # set header (ScanImage metadata)
 
     def __array__(self):
         return self[:]
@@ -400,7 +391,7 @@ class BaseScan():
         for tiff_file in self.tiff_files:
 
             # Get indices in this tiff file and in output array
-            final_page_in_file = start_page + len(tiff_file)
+            final_page_in_file = start_page + len(tiff_file.pages)
             is_page_in_file = lambda page: page in range(start_page, final_page_in_file)
             pages_in_file = filter(is_page_in_file, pages_to_read)
             file_indices = [page - start_page for page in pages_in_file]
@@ -410,7 +401,7 @@ class BaseScan():
             if len(file_indices) > 0:
                 # this line looks a bit ugly but is memory efficient. Do not separate
                 pages[global_indices] = tiff_file.asarray(key=file_indices)[..., yslice, xslice]
-            start_page += len(tiff_file)
+            start_page += len(tiff_file.pages)
 
         # Reshape the pages into (slices, y, x, channels, frames)
         new_shape = [len(frame_list), len(slice_list), len(channel_list), out_height, out_width]
@@ -715,11 +706,10 @@ class ScanMultiROI(BaseScan201xx):
 
     def _create_rois(self):
         """Create scan rois from the configuration file. """
-        with TiffFile(self.filenames[0], pages=[0]) as tiff_file:
-            roi_infos = tiff_file.scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
-
+        roi_infos = self.tiff_files[0].scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
         roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
         roi_infos = list(filter(lambda r: isinstance(r['zs'], (int, list)), roi_infos)) # discard empty/malformed ROIs
+
         rois = [ROI(roi_info) for roi_info in roi_infos]
         return rois
 
