@@ -135,7 +135,7 @@ class BaseScan():
         else:
             match = re.search(r'hFastZ\.numVolumes = (?P<num_frames>.*)', self.header)
         num_requested_frames = int(1e9 if match.group('num_frames')=='Inf' else
-                                   match.group('num_frames')) if match else None
+                                   float(match.group('num_frames'))) if match else None
         return num_requested_frames
 
     @property
@@ -188,7 +188,7 @@ class BaseScan():
     def _num_averaged_frames(self):
         """ Number of requested frames are averaged to form one saved frame. """
         match = re.search(r'hScan2D\.logAverageFactor = (?P<num_avg_frames>.*)', self.header)
-        num_averaged_frames = int(match.group('num_avg_frames')) if match else None
+        num_averaged_frames = int(float(match.group('num_avg_frames'))) if match else None
         return num_averaged_frames
 
     @property
