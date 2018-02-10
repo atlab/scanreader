@@ -102,7 +102,7 @@ def listify_index(index, dim_size):
     Raises:
         TypeError: If index is not either integer, slice, or array.
     """
-    if np.issubdtype(type(index), int):
+    if np.issubdtype(type(index), np.signedinteger):
         index_as_list = [index] if index >= 0 else [dim_size + index]
     elif isinstance(index, (list, tuple, np.ndarray)):
         index_as_list = [x if x >= 0 else (dim_size + x) for x in index]
