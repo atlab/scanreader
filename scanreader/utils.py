@@ -43,15 +43,15 @@ def check_index_type(axis, index):
 
 
 def _index_has_valid_type(index):
-    if np.issubdtype(type(index), int): # integer
+    if np.issubdtype(type(index), np.signedinteger): # integer
         return True
     if isinstance(index, slice): # slice
         return True
     if (isinstance(index, (list, tuple)) and
-        all(np.issubdtype(type(x), int) for x in index)):  # list or tuple
+        all(np.issubdtype(type(x), np.signedinteger) for x in index)):  # list or tuple
         return True
-    if (isinstance(index, np.ndarray) and np.issubdtype(index.dtype, int) and
-        index.ndim == 1):  # array
+    if (isinstance(index, np.ndarray) and np.issubdtype(index.dtype, np.signedinteger)
+        and index.ndim == 1):  # array
         return True
 
     return False
@@ -77,7 +77,7 @@ def check_index_is_in_bounds(axis, index, dim_size):
 
 
 def _is_index_in_bounds(index, dim_size):
-    if np.issubdtype(type(index), int):
+    if np.issubdtype(type(index), np.signedinteger):
         return (index in range(-dim_size, dim_size))
     elif isinstance(index, (list, tuple, np.ndarray)):
         return all(x in range(-dim_size, dim_size) for x in index)
