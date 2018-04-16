@@ -14,6 +14,7 @@ print('Extracted data directory:', data_dir)
 # These are big files so they are not available in Github
 scan_file_5_1 = path.join(data_dir, 'scan_5_1_001.tif') # 2 channels, 3 slices
 scan_file_5_2 = path.join(data_dir, 'scan_5_2.tif') # 2 channels, 3 slices
+scan_file_5_3 = path.join(data_dir, 'scan_5_3.tif') # 2 channels, 1 slice
 scan_file_2016b_multiroi = path.join(data_dir, 'scan_2016b_multiroi_001.tif') # all rois have same dimensions, 1 channel 5 slices
 scan_file_2016b_multiroi_hard = path.join(data_dir, 'scan_2016b_multiroi_hard.tif') # rois have diff dimensions and they are volumes, 2 channels, 3 slices, roi1 at depth1, roi1 and 2 at depth 2, roi 2 at depth 2, thus 4 fields
 scan_file_5_1_multifiles = [path.join(data_dir, 'scan_5_1_001.tif'), path.join(data_dir, 'scan_5_1_002.tif')] # second file has less pages
@@ -179,6 +180,30 @@ class ScanTest(TestCase):
         self.assertEqualShapeAndSum(first_channel, (3, 512, 512, 366), 468225501096)
         first_frame = scan[:, :, :, :, 0]
         self.assertEqualShapeAndSum(first_frame, (3, 512, 512, 2), 1381773476)
+
+    def test_5_3(self):
+        scan = scanreader.read_scan(scan_file_5_3)
+
+        # Test it is iterable
+        fields_sum =  [1471837154]
+        for i, field in enumerate(scan):
+            self.assertEqualShapeAndSum(field, (256, 256, 2, 21), fields_sum[i])
+
+        # Test it can be obtained as array
+        scan_as_array = np.array(scan)
+        self.assertEqualShapeAndSum(scan_as_array, (1, 256, 256, 2, 21), 1471837154)
+
+        # Test indexation
+        first_field = scan[0, :, :, :, :]
+        self.assertEqualShapeAndSum(first_field, (256, 256, 2, 21), 1471837154)
+        first_row = scan[:, 0,  :, :, :]
+        self.assertEqualShapeAndSum(first_row, (1, 256, 2, 21), 5749516)
+        first_column = scan[:, :, 0, :, :]
+        self.assertEqualShapeAndSum(first_column, (1, 256, 2, 21), 5749625)
+        first_channel = scan[:, :, :, 0, :]
+        self.assertEqualShapeAndSum(first_channel, (1, 256, 256, 21), 923762774)
+        first_frame = scan[:, :, :, :, 0]
+        self.assertEqualShapeAndSum(first_frame, (1, 256, 256, 2), 70090210)
 
 
     def test_5_1_multifile(self):

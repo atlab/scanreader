@@ -8,9 +8,10 @@ BaseScan
     BaseScan5
         Scan5Point1
         Scan5Point2
-            Scan2016b
-            Scan2017a
-            Scan2017b
+            Scan5Point3
+                Scan2016b
+                Scan2017a
+                Scan2017b
     ScanMultiRoi
 """
 from tifffile import TiffFile
@@ -592,7 +593,7 @@ class Scan5Point2(BaseScan5):
         return image_width_in_microns
 
 
-class BaseScan201xx(BaseScan):
+class NewerScan():
     """ Shared features among all newer scans. """
     @property
     def is_slow_stack_with_fastZ(self):
@@ -602,22 +603,27 @@ class BaseScan201xx(BaseScan):
         return slow_with_fastZ
 
 
-class Scan2016b(BaseScan201xx, Scan5Point2):
+class Scan5Point3(NewerScan, Scan5Point2): # NewerScan first to shadow Scan5Point2's properties
+    """ScanImage 5.3"""
+    pass
+
+
+class Scan2016b(Scan5Point3):
     """ ScanImage 2016b"""
     pass
 
 
-class Scan2017a(BaseScan201xx, Scan5Point2):
+class Scan2017a(Scan5Point3):
     """ ScanImage 2017a"""
     pass
 
 
-class Scan2017b(BaseScan201xx, Scan5Point2):
+class Scan2017b(Scan5Point3):
     """ ScanImage 2017b"""
     pass
 
 
-class ScanMultiROI(BaseScan201xx):
+class ScanMultiROI(NewerScan, BaseScan):
     """An extension of ScanImage v5 that manages multiROI data (output from mesoscope).
 
      Attributes:
