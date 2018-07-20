@@ -8,9 +8,11 @@ BaseScan
     BaseScan5
         Scan5Point1
         Scan5Point2
-            Scan2016b
-            Scan2017a
-            Scan2017b
+            Scan5Point3
+                Scan2016b
+                Scan2017a
+                Scan2017b
+                Scan2018a
     ScanMultiRoi
 """
 from tifffile import TiffFile
@@ -135,7 +137,7 @@ class BaseScan():
         else:
             match = re.search(r'hFastZ\.numVolumes = (?P<num_frames>.*)', self.header)
         num_requested_frames = int(1e9 if match.group('num_frames')=='Inf' else
-                                   match.group('num_frames')) if match else None
+                                   float(match.group('num_frames'))) if match else None
         return num_requested_frames
 
     @property
@@ -188,7 +190,7 @@ class BaseScan():
     def _num_averaged_frames(self):
         """ Number of requested frames are averaged to form one saved frame. """
         match = re.search(r'hScan2D\.logAverageFactor = (?P<num_avg_frames>.*)', self.header)
-        num_averaged_frames = int(match.group('num_avg_frames')) if match else None
+        num_averaged_frames = int(float(match.group('num_avg_frames'))) if match else None
         return num_averaged_frames
 
     @property
@@ -556,7 +558,8 @@ class BaseScan5(BaseScan):
                                 len(frame_list)) # put back any dropped dimension
 
         # If original index was an integer, delete that axis (as in numpy indexing)
-        squeeze_dims = [i for i, index in enumerate(full_key) if np.issubdtype(type(index), int)]
+        squeeze_dims = [i for i, index in enumerate(full_key) if np.issubdtype(type(index),
+                                                                               np.signedinteger)]
         item = np.squeeze(item, axis=tuple(squeeze_dims))
 
         return item
@@ -591,7 +594,7 @@ class Scan5Point2(BaseScan5):
         return image_width_in_microns
 
 
-class BaseScan201xx(BaseScan):
+class NewerScan():
     """ Shared features among all newer scans. """
     @property
     def is_slow_stack_with_fastZ(self):
@@ -601,22 +604,31 @@ class BaseScan201xx(BaseScan):
         return slow_with_fastZ
 
 
-class Scan2016b(BaseScan201xx, Scan5Point2):
+class Scan5Point3(NewerScan, Scan5Point2): # NewerScan first to shadow Scan5Point2's properties
+    """ScanImage 5.3"""
+    pass
+
+
+class Scan2016b(Scan5Point3):
     """ ScanImage 2016b"""
     pass
 
 
-class Scan2017a(BaseScan201xx, Scan5Point2):
+class Scan2017a(Scan5Point3):
     """ ScanImage 2017a"""
     pass
 
 
-class Scan2017b(BaseScan201xx, Scan5Point2):
+class Scan2017b(Scan5Point3):
     """ ScanImage 2017b"""
     pass
 
+class Scan2017b(Scan5Point3):
+    """ ScanImage 2018a"""
+    pass
 
-class ScanMultiROI(BaseScan201xx):
+
+class ScanMultiROI(NewerScan, BaseScan):
     """An extension of ScanImage v5 that manages multiROI data (output from mesoscope).
 
      Attributes:
@@ -852,7 +864,8 @@ class ScanMultiROI(BaseScan201xx):
                 item[i, output_ys, output_xs] = pages[0, ys, xs]
 
         # If original index was an integer, delete that axis (as in numpy indexing)
-        squeeze_dims = [i for i, index in enumerate(full_key) if np.issubdtype(type(index), int)]
+        squeeze_dims = [i for i, index in enumerate(full_key) if np.issubdtype(type(index),
+                                                                               np.signedinteger)]
         item = np.squeeze(item, axis=tuple(squeeze_dims))
 
         return item
