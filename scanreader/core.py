@@ -14,7 +14,7 @@ import numpy as np
 import re
 from .exceptions import ScanImageVersionError, PathnameError
 from .scans import Scan5Point1, Scan5Point2, Scan5Point3
-from .scans import Scan2016b, Scan2017a, Scan2017b, ScanMultiROI
+from .scans import Scan2016b, Scan2017a, Scan2017b, Scan2018a, ScanMultiROI
 
 def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     """ Reads a ScanImage scan.
@@ -62,6 +62,12 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
             scan = ScanMultiROI(join_contiguous=join_contiguous)
         else:
             scan = Scan2017b()
+
+    elif version == '2018a':
+        if is_scan_multiROI(file_info):
+            scan = ScanMultiROI(join_contiguous=join_contiguous)
+        else:
+            scan = Scan2018a()
     else:
         error_msg = 'Sorry, ScanImage version {} is not supported'.format(version)
         raise ScanImageVersionError(error_msg)
