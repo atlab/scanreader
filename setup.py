@@ -5,7 +5,7 @@ long_description = "Python TIFF Stack Reader for ScanImage 5 scans (including mu
 
 setup(
     name='scanreader',
-    version='0.4.3',
+    version='0.4.4',
     description="Reader for ScanImage 5 scans (including slow stacks and multiROI).",
     long_description=long_description,
     author='Erick Cobos',

@@ -1,6 +1,7 @@
 """ Some classes used for MultiROI scan processing. """
 import numpy as np
 
+
 class ROI:
     """ Holds ROI info and computes an xy plane (scanfield) at a given z.
 
@@ -82,7 +83,7 @@ class ROI:
         else:
             if len(self.scanfields) == 1: # single scanfield extending from -inf to inf
                 field = self.scanfields[0].as_field()
-                field.depth = round(scanning_depth)
+                field.depth = scanning_depth
 
             else: # interpolate between scanfields
                 scanfield_depths = [sf.depth for sf in self.scanfields]
@@ -100,7 +101,7 @@ class ROI:
                                             scanfield_widths)
                     field.width = round(field.width / 2) * 2 # round to the closest even
 
-                    field.depth = round(scanning_depth)
+                    field.depth = scanning_depth
 
                     scanfield_ys = [sf.y for sf in self.scanfields]
                     field.y = np.interp(scanning_depth, scanfield_depths, scanfield_ys)
@@ -144,6 +145,7 @@ class Scanfield:
         return Field(height=self.height, width=self.width, depth=self.depth, y=self.y,
                      x=self.x, height_in_degrees=self.height_in_degrees,
                      width_in_degrees=self.width_in_degrees)
+
 
 class Field(Scanfield):
     """ Two-dimensional scanning plane. An extension of scanfield with some functionality.
