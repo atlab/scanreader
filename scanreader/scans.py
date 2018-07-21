@@ -623,7 +623,8 @@ class Scan2017b(Scan5Point3):
     """ ScanImage 2017b"""
     pass
 
-class Scan2017b(Scan5Point3):
+
+class Scan2018a(Scan5Point3):
     """ ScanImage 2018a"""
     pass
 

@@ -13,8 +13,11 @@ from os import path
 import numpy as np
 import re
 from .exceptions import ScanImageVersionError, PathnameError
-from .scans import Scan5Point1, Scan5Point2, Scan5Point3
-from .scans import Scan2016b, Scan2017a, Scan2017b, Scan2018a, ScanMultiROI
+from . import scans
+
+_scans = {'5.1': scans.Scan5Point1, '5.2': scans.Scan5Point2, '5.3': scans.Scan5Point3,
+          '2016b': scans.Scan2016b, '2017a': scans.Scan2017a, '2017b': scans.Scan2017b,
+          '2018a': scans.Scan2018a}
 
 def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     """ Reads a ScanImage scan.
@@ -41,33 +44,10 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     version = get_scanimage_version(file_info)
 
     # Select the appropriate scan object
-    if version == '5.1':
-        scan = Scan5Point1()
-    elif version == '5.2':
-        scan = Scan5Point2()
-    elif version == '5.3':
-        scan = Scan5Point3()
-    elif version == '2016b':
-        if is_scan_multiROI(file_info):
-            scan = ScanMultiROI(join_contiguous=join_contiguous)
-        else:
-            scan = Scan2016b()
-    elif version == '2017a':
-        if is_scan_multiROI(file_info):
-            scan = ScanMultiROI(join_contiguous=join_contiguous)
-        else:
-            scan = Scan2017a()
-    elif version == '2017b':
-        if is_scan_multiROI(file_info):
-            scan = ScanMultiROI(join_contiguous=join_contiguous)
-        else:
-            scan = Scan2017b()
-
-    elif version == '2018a':
-        if is_scan_multiROI(file_info):
-            scan = ScanMultiROI(join_contiguous=join_contiguous)
-        else:
-            scan = Scan2018a()
+    if version in ['2016b', '2017a', '2017b', '2018a'] and is_scan_multiROI(file_info):
+        scan = scans.ScanMultiROI(join_contiguous=join_contiguous)
+    elif version in _scans:
+        scan = _scans[version]()
     else:
         error_msg = 'Sorry, ScanImage version {} is not supported'.format(version)
         raise ScanImageVersionError(error_msg)
