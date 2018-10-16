@@ -94,12 +94,12 @@ class ROI:
                     scanfield_heights = [sf.height for sf in self.scanfields]
                     field.height = np.interp(scanning_depth, scanfield_depths,
                                              scanfield_heights)
-                    field.height = round(field.height / 2) * 2 # round to the closest even
+                    field.height = int(round(field.height / 2)) * 2 # round to the closest even
 
                     scanfield_widths = [sf.width for sf in self.scanfields]
                     field.width = np.interp(scanning_depth, scanfield_depths,
                                             scanfield_widths)
-                    field.width = round(field.width / 2) * 2 # round to the closest even
+                    field.width = int(round(field.width / 2)) * 2 # round to the closest even
 
                     field.depth = scanning_depth
 
