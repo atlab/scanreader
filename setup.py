@@ -14,7 +14,7 @@ setup(
     url='https://github.com/atlab/scanreader',
     keywords='ScanImage scanreader multiROI 2016b tiff',
     packages=['scanreader'],
-    install_requires=['numpy>=1.12.0', 'tifffile>=0.15.0'],
+    install_requires=['numpy>=1.12.0', 'tifffile==0.15.1'],
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Science/Research',
