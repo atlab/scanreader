@@ -1,4 +1,6 @@
-"""Test suite for the different functionality of scanreader. It takes a minute."""
+"""Test suite for the different functionality of scanreader. It takes a minute.
+Run as: `nose2 test_scanreader` from inside scanreader/
+"""
 
 from unittest import TestCase
 from os import path
