@@ -39,7 +39,7 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
         raise PathnameError(error_msg)
 
     # Read version from one of the tiff files
-    with TiffFile(filenames[0], movie=True) as tiff_file:
+    with TiffFile(filenames[0]) as tiff_file:
         file_info = tiff_file.pages[0].description + '\n' + tiff_file.pages[0].software
     version = get_scanimage_version(file_info)
 

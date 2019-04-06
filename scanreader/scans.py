@@ -13,6 +13,7 @@ BaseScan
                 Scan2017a
                 Scan2017b
                 Scan2018a
+                Scan2018b
     ScanMultiRoi
 """
 from tifffile import TiffFile
@@ -64,7 +65,7 @@ class BaseScan():
     @property
     def tiff_files(self):
         if self._tiff_files is None:
-            self._tiff_files = [TiffFile(filename, movie=True) for filename in self.filenames]
+            self._tiff_files = [TiffFile(filename) for filename in self.filenames]
         return self._tiff_files
 
     @tiff_files.deleter
