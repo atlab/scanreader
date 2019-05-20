@@ -727,7 +727,8 @@ class ScanMultiROI(NewerScan, BaseScan):
         """Create scan rois from the configuration file. """
         roi_infos = self.tiff_files[0].scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
         roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
-        roi_infos = list(filter(lambda r: isinstance(r['zs'], (int, list)), roi_infos)) # discard empty/malformed ROIs
+        roi_infos = list(filter(lambda r: isinstance(r['zs'], (int, float, list)),
+                                roi_infos)) # discard empty/malformed ROIs
 
         rois = [ROI(roi_info) for roi_info in roi_infos]
         return rois
