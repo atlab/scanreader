@@ -9,6 +9,8 @@ BaseScan
         Scan5Point1
         Scan5Point2
             Scan5Point3
+                Scan5Point4
+                Scan5Point5
                 Scan2016b
                 Scan2017a
                 Scan2017b
@@ -607,6 +609,14 @@ class NewerScan():
 
 class Scan5Point3(NewerScan, Scan5Point2): # NewerScan first to shadow Scan5Point2's properties
     """ScanImage 5.3"""
+    pass
+
+class Scan5Point4(Scan5Point3):
+    """ScanImage 5.4"""
+    pass
+
+class Scan5Point5(Scan5Point3):
+    """ScanImage 5.5"""
     pass
 
 
