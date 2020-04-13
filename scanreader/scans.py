@@ -11,11 +11,15 @@ BaseScan
             Scan5Point3
                 Scan5Point4
                 Scan5Point5
+                Scan5Point6
+                Scan5Point7
                 Scan2016b
                 Scan2017a
                 Scan2017b
                 Scan2018a
                 Scan2018b
+                Scan2019a
+                Scan2019b
     ScanMultiRoi
 """
 from tifffile import TiffFile
@@ -619,6 +623,14 @@ class Scan5Point5(Scan5Point3):
     """ScanImage 5.5"""
     pass
 
+class Scan5Point6(Scan5Point3):
+    """ScanImage 5.6"""
+    pass
+
+class Scan5Point7(Scan5Point3):
+    """ScanImage 5.7"""
+    pass
+
 
 class Scan2016b(Scan5Point3):
     """ ScanImage 2016b"""
@@ -641,7 +653,17 @@ class Scan2018a(Scan5Point3):
 
 
 class Scan2018b(Scan5Point3):
-    """ ScanImage 2018a"""
+    """ ScanImage 2018b"""
+    pass
+
+
+class Scan2019a(Scan5Point3):
+    """ ScanImage 2019a"""
+    pass
+
+
+class Scan2019b(Scan5Point3):
+    """ ScanImage 2019b"""
     pass
 
 

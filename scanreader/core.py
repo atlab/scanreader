@@ -16,9 +16,12 @@ from .exceptions import ScanImageVersionError, PathnameError
 from . import scans
 
 _scans = {'5.1': scans.Scan5Point1, '5.2': scans.Scan5Point2, '5.3': scans.Scan5Point3,
-          '5.4': scans.Scan5Point4, '5.5': scans.Scan5Point5, '2016b': scans.Scan2016b,
-          '2017a': scans.Scan2017a, '2017b': scans.Scan2017b, '2018a': scans.Scan2018a,
-          '2018b': scans.Scan2018b}
+          '5.4': scans.Scan5Point4, '5.5': scans.Scan5Point5, 
+          '5.6': scans.Scan5Point6, '5.7': scans.Scan5Point7, 
+          '2016b': scans.Scan2016b, 
+          '2017a': scans.Scan2017a, '2017b': scans.Scan2017b, 
+          '2018a': scans.Scan2018a, '2018b': scans.Scan2018b,
+          '2019a': scans.Scan2019a, '2019b': scans.Scan2019b}
 
 def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     """ Reads a ScanImage scan.
