@@ -114,11 +114,12 @@ def get_scanimage_version(info):
         match = re.search(p, info)
         if match is not None: 
             version = match.group('version') 
+            break
 
     if version is None: 
         raise ScanImageVersionError('Could not find ScanImage version in the tiff header')
 
-    return str(version)
+    return version
 
 def is_scan_multiROI(info):
     """Looks whether the scan is multiROI in the tiff file headers.

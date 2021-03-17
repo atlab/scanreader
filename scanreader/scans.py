@@ -95,6 +95,7 @@ class BaseScan():
             match = re.search(p, self.header)
             if match is not None: 
                 version = match.group('version') 
+                break
         return version
 
     @property
