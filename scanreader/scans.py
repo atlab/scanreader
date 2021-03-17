@@ -20,6 +20,7 @@ BaseScan
                 Scan2018b
                 Scan2019a
                 Scan2019b
+                Scan2020
     ScanMultiRoi
 """
 from tifffile import TiffFile
@@ -664,6 +665,10 @@ class Scan2019a(Scan5Point3):
 
 class Scan2019b(Scan5Point3):
     """ ScanImage 2019b"""
+    pass
+
+class Scan2020(Scan5Point3):
+    """ ScanImage 2020 and beyond"""
     pass
 
 
