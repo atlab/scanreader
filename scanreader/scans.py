@@ -84,8 +84,17 @@ class BaseScan():
 
     @property
     def version(self):
-        match = re.search(r"SI.?\.VERSION_MAJOR = '(?P<version>.*)'", self.header)
-        version = match.group('version') if match else None
+        pattern_before_2020 = r"SI.?\.VERSION_MAJOR = '(?P<version>.*)'"
+        pattern_after_2020  = r"SI.?\.VERSION_MAJOR = (?P<version>.*)"
+
+        patterns = [pattern_before_2020, pattern_after_2020]
+
+        version = None
+        for pattern in patterns: 
+            p = re.compile(pattern)
+            match = re.search(p, self.header)
+            if match is not None: 
+                version = match.group('version') 
         return version
 
     @property

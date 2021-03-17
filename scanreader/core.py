@@ -118,7 +118,7 @@ def get_scanimage_version(info):
     if version is None: 
         raise ScanImageVersionError('Could not find ScanImage version in the tiff header')
 
-    return version
+    return str(version)
 
 def is_scan_multiROI(info):
     """Looks whether the scan is multiROI in the tiff file headers.
