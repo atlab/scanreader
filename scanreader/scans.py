@@ -20,6 +20,7 @@ BaseScan
                 Scan2018b
                 Scan2019a
                 Scan2019b
+                Scan2020
     ScanMultiRoi
 """
 from tifffile import TiffFile
@@ -83,7 +84,7 @@ class BaseScan():
 
     @property
     def version(self):
-        match = re.search(r"SI.?\.VERSION_MAJOR = '(?P<version>.*)'", self.header)
+        match = re.search(r"SI.?\.VERSION_MAJOR = '?(?P<version>[^\s']*)'?", self.header)
         version = match.group('version') if match else None
         return version
 
@@ -664,6 +665,10 @@ class Scan2019a(Scan5Point3):
 
 class Scan2019b(Scan5Point3):
     """ ScanImage 2019b"""
+    pass
+
+class Scan2020(Scan5Point3):
+    """ ScanImage 2020"""
     pass
 
 
