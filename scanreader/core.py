@@ -22,7 +22,7 @@ _scans = {'5.1': scans.Scan5Point1, '5.2': scans.Scan5Point2, '5.3': scans.Scan5
           '2017a': scans.Scan2017a, '2017b': scans.Scan2017b, 
           '2018a': scans.Scan2018a, '2018b': scans.Scan2018b,
           '2019a': scans.Scan2019a, '2019b': scans.Scan2019b,
-          '2020': scans.Scan2020,}
+          '2020': scans.Scan2020, '2021': scans.Scan2021}
 
 def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     """ Reads a ScanImage scan.
@@ -50,7 +50,7 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
 
     # Select the appropriate scan object
     
-    if (version in ['2016b', '2017a', '2017b', '2018a', '2018b', '2019a', '2019b', '2020'] and
+    if (version in ['2016b', '2017a', '2017b', '2018a', '2018b', '2019a', '2019b', '2020', '2021'] and
             is_scan_multiROI(file_info)):
         scan = scans.ScanMultiROI(join_contiguous=join_contiguous)
     elif version in _scans:
