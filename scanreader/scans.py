@@ -143,7 +143,13 @@ class BaseScan():
              match = re.search(r'hStackManager\.framesPerSlice = (?P<num_frames>.*)',
                               self.header)
         else:
+            # SI 2023 (TIFF_FORMAT_VERSION > 3) moved this field from hFastZ to
+            # hStackManager. Try the pre-2023 name first so older versions match
+            # exactly as before; only fall through when it's absent.
             match = re.search(r'hFastZ\.numVolumes = (?P<num_frames>.*)', self.header)
+            if not match:
+                match = re.search(r'hStackManager\.numVolumes = (?P<num_frames>.*)',
+                                  self.header)
         num_requested_frames = int(1e9 if match.group('num_frames')=='Inf' else
                                    float(match.group('num_frames'))) if match else None
         return num_requested_frames
@@ -238,14 +244,36 @@ class BaseScan():
     def motor_position_at_zero(self):
         """ Motor position (x, y and z in microns) corresponding to the scan's (0, 0, 0)
         point. For non-multiroi scans, (x=0, y=0) marks the center of the FOV."""
+        # SI 2023 renamed hMotors.motorPosition to hMotors.samplePosition.
         match = re.search(r'hMotors\.motorPosition = (?P<motor_position>.*)', self.header)
+        if not match:
+            match = re.search(r'hMotors\.samplePosition = (?P<motor_position>.*)', self.header)
         motor_position = matlabstr2py(match.group('motor_position'))[:3] if match else None
+        # SI 2023: the samplePosition -> motor_position_at_zero mapping was only
+        # validated on rigs where the gantry motors are disconnected (samplePosition
+        # observed as [0, 0, 0] on every SI 2023 scan tested). If your rig produces
+        # non-zero values, downstream depth calculations (e.g. cajal/pipeline
+        # reso.py:113 -- motor_z + field_z) may be wrong. Please verify the semantics
+        # for your rig and update this check.
+        if (self.version == '2023' and motor_position is not None
+                and any(v != 0 for v in motor_position)):
+            raise NotImplementedError(
+                'motor_position_at_zero = {!r} on a SI 2023 scan. Non-zero '
+                'hMotors.samplePosition values have not been tested for SI 2023 -- '
+                'the [0, 0, 0] case (disconnected gantry) was the only observed '
+                'configuration during initial support. Please validate the '
+                'samplePosition -> motor_position_at_zero mapping semantics '
+                'against downstream depth calculations for your rig and update '
+                'this check in scanreader/scans.py.'.format(motor_position))
         return motor_position
 
     @property
     def initial_secondary_z(self):
         """ Initial position in z (microns) of the secondary motor (if any)."""
+        # SI 2023 renamed hMotors.motorPosition to hMotors.samplePosition.
         match = re.search(r'hMotors\.motorPosition = (?P<motor_position>.*)', self.header)
+        if not match:
+            match = re.search(r'hMotors\.samplePosition = (?P<motor_position>.*)', self.header)
         if match:
             motor_position = matlabstr2py(match.group('motor_position'))
             secondary_z = motor_position[3] if len(motor_position) > 3 else None
@@ -608,8 +636,21 @@ class NewerScan():
     def is_slow_stack_with_fastZ(self):
         match = re.search(r'hStackManager\.slowStackWithFastZ = (?P<slow_with_fastZ>.*)',
                           self.header)
-        slow_with_fastZ = (match.group('slow_with_fastZ') in ['true', '1']) if match else None
-        return slow_with_fastZ
+        if match:
+            return match.group('slow_with_fastZ') in ['true', '1']
+        # SI 2023 dropped hStackManager.slowStackWithFastZ. Reconstruct from the pair
+        # (stackMode, stackActuator): True iff a slow-stack mode uses the fastZ actuator
+        # (the state pre-2023 flagged as slowStackWithFastZ = true). Downstream code
+        # (e.g. cajal/pipeline reso.py:113, stack.py:81) uses this flag to discriminate
+        # motor-vs-fastZ actuator identity in slow-stack mode for the Z-direction
+        # convention. Waveform type (stackFastWaveformType = 'step' vs 'sawtooth') is
+        # orthogonal and not consulted here -- fast-mode scans skip this branch entirely
+        # via the outer `if scan.is_slow_stack` check in consumers.
+        m_mode = re.search(r"hStackManager\.stackMode = '(?P<mode>[^']*)'", self.header)
+        m_act = re.search(r"hStackManager\.stackActuator = '(?P<act>[^']*)'", self.header)
+        if m_mode is None or m_act is None:
+            return None
+        return m_mode.group('mode') == 'slow' and m_act.group('act') == 'fastZ'
 
 
 class Scan5Point3(NewerScan, Scan5Point2): # NewerScan first to shadow Scan5Point2's properties
@@ -673,6 +714,11 @@ class Scan2020(Scan5Point3):
 
 class Scan2021(Scan5Point3):
     """ ScanImage 2021"""
+    pass
+
+
+class Scan2023(Scan5Point3):
+    """ ScanImage 2023"""
     pass
 
 
