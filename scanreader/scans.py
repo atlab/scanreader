@@ -28,6 +28,7 @@ from tifffile.tifffile import matlabstr2py
 import numpy as np
 import re
 import itertools
+import json
 from . import utils
 from .multiroi import ROI
 from .exceptions import FieldDimensionMismatch
@@ -812,7 +813,24 @@ class ScanMultiROI(NewerScan, BaseScan):
 
     def _create_rois(self):
         """Create scan rois from the configuration file. """
-        roi_infos = self.tiff_files[0].scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
+        # tifffile <= 2020.9.3 (the last Python-3.6-compatible release) doesn't
+        # populate scanimage_metadata['RoiGroups'] for SI 2023 headers. The JSON
+        # is still present in the standard TIFF Artist tag (code 315), which SI
+        # writes it to at acquisition time. Fall back to that tag when the
+        # parsed metadata is missing RoiGroups. Modern tifffile users hit the
+        # first branch and behaviour is byte-identical to pre-change.
+        md = self.tiff_files[0].scanimage_metadata
+        if isinstance(md, dict) and 'RoiGroups' in md:
+            roi_infos = md['RoiGroups']['imagingRoiGroup']['rois']
+        else:
+            artist_tag = self.tiff_files[0].pages[0].tags.get(315)  # TIFF Artist
+            if artist_tag is None:
+                raise RuntimeError(
+                    "Cannot locate RoiGroups metadata: scanimage_metadata does "
+                    "not contain 'RoiGroups' and the TIFF file has no Artist "
+                    "tag (315). This scan may not be a valid multiROI SI scan."
+                )
+            roi_infos = json.loads(artist_tag.value)['RoiGroups']['imagingRoiGroup']['rois']
         roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
         roi_infos = list(filter(lambda r: isinstance(r['zs'], (int, float, list)),
                                 roi_infos)) # discard empty/malformed ROIs

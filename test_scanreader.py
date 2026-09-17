@@ -519,6 +519,41 @@ class ScanTest(TestCase):
         self.assertEqualShapeAndSum(first_frame, (10, 252, 252, 1), -8979518)
 
 
+    def test_2023_multiroi_artist_tag_fallback(self):
+        """ScanMultiROI._create_rois should fall back to the TIFF Artist tag
+        (315) when tifffile is too old to populate scanimage_metadata['RoiGroups'].
+        This is the case for tifffile <= 2020.9.3, the last release compatible
+        with Python 3.6. Verified by mocking scanimage_metadata to drop
+        'RoiGroups' entirely and confirming the fallback path produces the
+        same ROI structure as the modern path."""
+        from unittest.mock import patch, PropertyMock
+
+        # Reference: load the scan via the normal (modern-tifffile) code path
+        scan_normal = scanreader.read_scan(scan_file_2023_multiroi)
+
+        # Fallback: mock scanimage_metadata to omit 'RoiGroups', forcing the
+        # Artist-tag path in _create_rois. The raw TIFF tags are untouched, so
+        # the fallback should find and parse the same JSON.
+        stub_metadata = {'FrameData': {}, 'version': 4}
+        with patch('tifffile.TiffFile.scanimage_metadata',
+                   new_callable=PropertyMock, return_value=stub_metadata):
+            scan_fallback = scanreader.read_scan(scan_file_2023_multiroi)
+
+        # Both paths should yield identical ROI structure and field geometry
+        self.assertEqual(scan_fallback.num_rois, scan_normal.num_rois)
+        self.assertEqual(scan_fallback.num_fields, scan_normal.num_fields)
+        self.assertEqual(scan_fallback.field_heights, scan_normal.field_heights)
+        self.assertEqual(scan_fallback.field_widths, scan_normal.field_widths)
+        self.assertEqual(scan_fallback.field_depths, scan_normal.field_depths)
+        self.assertEqual(scan_fallback.field_rois, scan_normal.field_rois)
+        self.assertEqual(scan_fallback.field_slices, scan_normal.field_slices)
+        for i in range(scan_normal.num_fields):
+            self.assertAlmostEqual(scan_fallback.field_heights_in_microns[i],
+                                    scan_normal.field_heights_in_microns[i], places=4)
+            self.assertAlmostEqual(scan_fallback.field_widths_in_microns[i],
+                                    scan_normal.field_widths_in_microns[i], places=4)
+
+
     def test_2018a_multiroi(self):
         scan = scanreader.read_scan(scan_file_2018a_multiroi)
 
