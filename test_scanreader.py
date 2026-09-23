@@ -9,6 +9,7 @@ from unittest import TestCase
 from os import path
 import numpy as np
 import scanreader
+from scanreader import scans
 from scanreader.exceptions import ScanReaderException
 
 # Get data directory
@@ -24,8 +25,8 @@ scan_file_2020 = path.join(data_dir, 'scan_2020.tif') # 2 channels, 1 slice
 scan_file_2016b_multiroi = path.join(data_dir, 'scan_2016b_multiroi_001.tif') # all rois have same dimensions, 1 channel 5 slices
 scan_file_2018a_multiroi = path.join(data_dir, 'scan_2018a_multiroi_001.tif') # all rois have same dimensions, 1 channel 3 slices, 5 fields per slice
 scan_file_2016b_multiroi_hard = path.join(data_dir, 'scan_2016b_multiroi_hard.tif') # rois have diff dimensions and they are volumes, 2 channels, 3 slices, roi1 at depth1, roi1 and 2 at depth 2, roi 2 at depth 2, thus 4 fields
-scan_file_2023 = path.join(data_dir, 'scan_2023.tif') # SI 2023 non-MROI reference scan, no stack, 1 channel, 100 frames, 512x512, exercises Scan2023 class dispatch + samplePosition fallback
-scan_file_2023_multiroi = path.join(data_dir, 'scan_2023_multiroi.tif') # SI 2023 MROI reference scan, fastZ 10 scanning depths (0-90um in 10um steps), 1 ROI, 10 volumes, exercises ScanMultiROI dispatch + hStackManager.numVolumes fallback + samplePosition fallback
+scan_file_2023 = path.join(data_dir, 'scan_2023.tif') # SI 2023 non-MROI reference scan, no stack, 1 channel, 100 frames, 512x512, exercises Scan2023 class dispatch + samplePosition
+scan_file_2023_multiroi = path.join(data_dir, 'scan_2023_multiroi.tif') # SI 2023 MROI reference scan, fastZ 10 scanning depths (0-90um in 10um steps), 1 ROI, 10 volumes, exercises ScanMultiROIPost2023 dispatch + hStackManager.numVolumes + samplePosition
 scan_file_5_1_multifiles = [path.join(data_dir, 'scan_5_1_001.tif'), path.join(data_dir, 'scan_5_1_002.tif')] # second file has less pages
 scan_file_2016b_multiroi_multifiles = [path.join(data_dir, 'scan_2016b_multiroi_001.tif'), path.join(data_dir, 'scan_2016b_multiroi_002.tif')]
 scan_file_join_contiguous = scan_file_2016b_multiroi
@@ -176,11 +177,12 @@ class ScanTest(TestCase):
             self.assertAlmostEqual(scan.field_heights_in_microns[i], heights_in_microns[i], places=4)
             self.assertAlmostEqual(scan.field_widths_in_microns[i], widths_in_microns[i], places=4)
 
-        # 2023 non-MROI reference scan (Scan2023 class direct dispatch).
-        # Exercises the samplePosition fallback (SI 2023 no longer emits
-        # hMotors.motorPosition; motor_position_at_zero comes from
-        # hMotors.samplePosition via the additive fallback in BaseScan).
+        # 2023 non-MROI reference scan. SI 2023 header changes live in the
+        # NewerScanPost2023 mixin, which Scan2023 pulls in; motor_position_at_zero
+        # reads hMotors.samplePosition (SI 2023 no longer emits motorPosition).
         scan = scanreader.read_scan(scan_file_2023)
+        self.assertIsInstance(scan, scans.Scan2023)
+        self.assertIsInstance(scan, scans.NewerScanPost2023)
         self.assertEqual(scan.version, '2023')
         self.assertEqual(scan.is_slow_stack, True)
         self.assertEqual(scan.is_multiROI, False)
@@ -201,9 +203,9 @@ class ScanTest(TestCase):
         self.assertEqual(scan.scanner_type, 'RGG')
         self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
         self.assertEqual(scan.initial_secondary_z, None)
-        # SI 2023 dropped hStackManager.slowStackWithFastZ; NewerScan reconstructs
-        # from (stackMode, stackActuator). This scan is slow+motor / fast+fastZ,
-        # neither of which qualifies as "slow stack with fastZ", so expect False.
+        # SI 2023 dropped hStackManager.slowStackWithFastZ; NewerScanPost2023
+        # reconstructs from (stackMode, stackActuator). This scan is slow+motor /
+        # fast+fastZ, neither of which qualifies as "slow stack with fastZ".
         self.assertEqual(scan.is_slow_stack_with_fastZ, False)
         self.assertEqual(scan.image_height, 512)
         self.assertEqual(scan.image_width, 512)
@@ -211,11 +213,14 @@ class ScanTest(TestCase):
         self.assertAlmostEqual(scan.image_height_in_microns, 640.2485160303218)
         self.assertAlmostEqual(scan.image_width_in_microns, 640.2485160303218)
 
-        # 2023 multiROI (fastZ + 10 scanning depths). Exercises ScanMultiROI
-        # dispatch plus both SI 2023 fallbacks: samplePosition (SI 2023 no
-        # longer emits hMotors.motorPosition) and hStackManager.numVolumes
-        # (SI 2023 no longer emits hFastZ.numVolumes on the fastZ path).
+        # 2023 multiROI (fastZ + 10 scanning depths). Dispatches to
+        # ScanMultiROIPost2023 -- multiROI machinery plus the SI 2023 header
+        # changes: samplePosition (SI 2023 no longer emits hMotors.motorPosition)
+        # and hStackManager.numVolumes (no longer hFastZ.numVolumes on fastZ).
         scan = scanreader.read_scan(scan_file_2023_multiroi)
+        self.assertIsInstance(scan, scans.ScanMultiROIPost2023)
+        self.assertIsInstance(scan, scans.ScanMultiROI)
+        self.assertIsInstance(scan, scans.NewerScanPost2023)
         self.assertEqual(scan.version, '2023')
         self.assertEqual(scan.is_slow_stack, False)
         self.assertEqual(scan.is_multiROI, True)
@@ -223,7 +228,7 @@ class ScanTest(TestCase):
         self.assertEqual(scan.requested_scanning_depths,
                          [0, 10, 20, 30, 40, 50, 60, 70, 80, 90])
         self.assertEqual(scan.num_scanning_depths, 10)
-        # numVolumes fallback: was hFastZ.numVolumes pre-2023, now hStackManager.numVolumes
+        # numVolumes: was hFastZ.numVolumes pre-2023, now hStackManager.numVolumes
         self.assertEqual(scan.num_requested_frames, 10)
         self.assertEqual(scan.num_frames, 10)
         self.assertEqual(scan.is_bidirectional, True)
@@ -236,15 +241,13 @@ class ScanTest(TestCase):
         self.assertAlmostEqual(scan.spatial_fill_fraction, 0.9238795325112867)
         self.assertAlmostEqual(scan.temporal_fill_fraction, 0.75)
         self.assertEqual(scan.scanner_type, 'RGG')
-        # samplePosition fallback (SI 2023 no longer emits motorPosition)
+        # samplePosition (SI 2023 no longer emits motorPosition)
         self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
         # samplePosition is 3-tuple, so no secondary-Z entry
         self.assertEqual(scan.initial_secondary_z, None)
-        # SI 2023 doesn't emit slowStackWithFastZ or motorSecondMotorZEnable
-        # (returns None on absence, matching pre-existing behaviour)
-        # SI 2023 dropped hStackManager.slowStackWithFastZ; NewerScan reconstructs
-        # from (stackMode, stackActuator). This scan is slow+motor / fast+fastZ,
-        # neither of which qualifies as "slow stack with fastZ", so expect False.
+        # SI 2023 dropped hStackManager.slowStackWithFastZ; NewerScanPost2023
+        # reconstructs from (stackMode, stackActuator). This scan is slow+motor /
+        # fast+fastZ, neither of which qualifies as "slow stack with fastZ".
         self.assertEqual(scan.is_slow_stack_with_fastZ, False)
         self.assertEqual(scan.num_rois, 1)
         self.assertEqual(scan.field_heights, [252] * 10)
@@ -519,39 +522,64 @@ class ScanTest(TestCase):
         self.assertEqualShapeAndSum(first_frame, (10, 252, 252, 1), -8979518)
 
 
-    def test_2023_multiroi_artist_tag_fallback(self):
-        """ScanMultiROI._create_rois should fall back to the TIFF Artist tag
-        (315) when tifffile is too old to populate scanimage_metadata['RoiGroups'].
-        This is the case for tifffile <= 2020.9.3, the last release compatible
-        with Python 3.6. Verified by mocking scanimage_metadata to drop
-        'RoiGroups' entirely and confirming the fallback path produces the
-        same ROI structure as the modern path."""
+    def test_2023_multiroi_reads_artist_tag(self):
+        """ScanMultiROIPost2023 reads RoiGroups from the TIFF Artist tag (315),
+        never from tifffile's parsed scanimage_metadata.
+
+        SI 2023 writes ScanImage metadata format version 4. tifffile's
+        read_scanimage_metadata() accepts only version 3, and
+        TiffFile.scanimage_metadata swallows the resulting ValueError, so
+        'RoiGroups' is silently absent on tifffile <= 2020.9.3 (the last
+        Python-3.6-compatible release). ScanImage writes the same JSON to the
+        Artist tag at acquisition time, readable on every tifffile version, so
+        the 2023 path must not depend on scanimage_metadata at all.
+
+        Verified by stubbing scanimage_metadata to what an old tifffile
+        effectively returns -- FrameData but no RoiGroups -- and confirming the
+        ROI structure is unchanged."""
         from unittest.mock import patch, PropertyMock
 
-        # Reference: load the scan via the normal (modern-tifffile) code path
         scan_normal = scanreader.read_scan(scan_file_2023_multiroi)
+        self.assertIsInstance(scan_normal, scans.ScanMultiROIPost2023)
 
-        # Fallback: mock scanimage_metadata to omit 'RoiGroups', forcing the
-        # Artist-tag path in _create_rois. The raw TIFF tags are untouched, so
-        # the fallback should find and parse the same JSON.
         stub_metadata = {'FrameData': {}, 'version': 4}
         with patch('tifffile.TiffFile.scanimage_metadata',
                    new_callable=PropertyMock, return_value=stub_metadata):
-            scan_fallback = scanreader.read_scan(scan_file_2023_multiroi)
+            scan_no_md = scanreader.read_scan(scan_file_2023_multiroi)
 
-        # Both paths should yield identical ROI structure and field geometry
-        self.assertEqual(scan_fallback.num_rois, scan_normal.num_rois)
-        self.assertEqual(scan_fallback.num_fields, scan_normal.num_fields)
-        self.assertEqual(scan_fallback.field_heights, scan_normal.field_heights)
-        self.assertEqual(scan_fallback.field_widths, scan_normal.field_widths)
-        self.assertEqual(scan_fallback.field_depths, scan_normal.field_depths)
-        self.assertEqual(scan_fallback.field_rois, scan_normal.field_rois)
-        self.assertEqual(scan_fallback.field_slices, scan_normal.field_slices)
+        # Identical ROI structure and field geometry with and without metadata
+        self.assertEqual(scan_no_md.num_rois, scan_normal.num_rois)
+        self.assertEqual(scan_no_md.num_fields, scan_normal.num_fields)
+        self.assertEqual(scan_no_md.field_heights, scan_normal.field_heights)
+        self.assertEqual(scan_no_md.field_widths, scan_normal.field_widths)
+        self.assertEqual(scan_no_md.field_depths, scan_normal.field_depths)
+        self.assertEqual(scan_no_md.field_rois, scan_normal.field_rois)
+        self.assertEqual(scan_no_md.field_slices, scan_normal.field_slices)
         for i in range(scan_normal.num_fields):
-            self.assertAlmostEqual(scan_fallback.field_heights_in_microns[i],
+            self.assertAlmostEqual(scan_no_md.field_heights_in_microns[i],
                                     scan_normal.field_heights_in_microns[i], places=4)
-            self.assertAlmostEqual(scan_fallback.field_widths_in_microns[i],
+            self.assertAlmostEqual(scan_no_md.field_widths_in_microns[i],
                                     scan_normal.field_widths_in_microns[i], places=4)
+
+
+    def test_pre2023_multiroi_still_uses_scanimage_metadata(self):
+        """Pre-2023 multiROI scans must keep reading scanimage_metadata.
+
+        Guards the claim that the SI 2023 work is additive: the Artist-tag read
+        belongs to ScanMultiROIPost2023 only and must not leak into
+        ScanMultiROI. Pre-2023 scans have no second source, so stubbing
+        scanimage_metadata away has to fail rather than silently succeed."""
+        from unittest.mock import patch, PropertyMock
+
+        scan = scanreader.read_scan(scan_file_2016b_multiroi)
+        self.assertIsInstance(scan, scans.ScanMultiROI)
+        self.assertNotIsInstance(scan, scans.ScanMultiROIPost2023)
+
+        stub_metadata = {'FrameData': {}, 'version': 3}
+        with patch('tifffile.TiffFile.scanimage_metadata',
+                   new_callable=PropertyMock, return_value=stub_metadata):
+            with self.assertRaises(KeyError):
+                scanreader.read_scan(scan_file_2016b_multiroi)
 
 
     def test_2018a_multiroi(self):

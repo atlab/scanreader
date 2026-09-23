@@ -21,7 +21,9 @@ BaseScan
                 Scan2019a
                 Scan2019b
                 Scan2020
+                Scan2023 (+ NewerScanPost2023)
     ScanMultiRoi
+        ScanMultiROIPost2023 (+ NewerScanPost2023)
 """
 from tifffile import TiffFile
 from tifffile.tifffile import matlabstr2py
@@ -144,13 +146,7 @@ class BaseScan():
              match = re.search(r'hStackManager\.framesPerSlice = (?P<num_frames>.*)',
                               self.header)
         else:
-            # SI 2023 (TIFF_FORMAT_VERSION > 3) moved this field from hFastZ to
-            # hStackManager. Try the pre-2023 name first so older versions match
-            # exactly as before; only fall through when it's absent.
             match = re.search(r'hFastZ\.numVolumes = (?P<num_frames>.*)', self.header)
-            if not match:
-                match = re.search(r'hStackManager\.numVolumes = (?P<num_frames>.*)',
-                                  self.header)
         num_requested_frames = int(1e9 if match.group('num_frames')=='Inf' else
                                    float(match.group('num_frames'))) if match else None
         return num_requested_frames
@@ -245,36 +241,14 @@ class BaseScan():
     def motor_position_at_zero(self):
         """ Motor position (x, y and z in microns) corresponding to the scan's (0, 0, 0)
         point. For non-multiroi scans, (x=0, y=0) marks the center of the FOV."""
-        # SI 2023 renamed hMotors.motorPosition to hMotors.samplePosition.
         match = re.search(r'hMotors\.motorPosition = (?P<motor_position>.*)', self.header)
-        if not match:
-            match = re.search(r'hMotors\.samplePosition = (?P<motor_position>.*)', self.header)
         motor_position = matlabstr2py(match.group('motor_position'))[:3] if match else None
-        # SI 2023: the samplePosition -> motor_position_at_zero mapping was only
-        # validated on rigs where the gantry motors are disconnected (samplePosition
-        # observed as [0, 0, 0] on every SI 2023 scan tested). If your rig produces
-        # non-zero values, downstream depth calculations (e.g. cajal/pipeline
-        # reso.py:113 -- motor_z + field_z) may be wrong. Please verify the semantics
-        # for your rig and update this check.
-        if (self.version == '2023' and motor_position is not None
-                and any(v != 0 for v in motor_position)):
-            raise NotImplementedError(
-                'motor_position_at_zero = {!r} on a SI 2023 scan. Non-zero '
-                'hMotors.samplePosition values have not been tested for SI 2023 -- '
-                'the [0, 0, 0] case (disconnected gantry) was the only observed '
-                'configuration during initial support. Please validate the '
-                'samplePosition -> motor_position_at_zero mapping semantics '
-                'against downstream depth calculations for your rig and update '
-                'this check in scanreader/scans.py.'.format(motor_position))
         return motor_position
 
     @property
     def initial_secondary_z(self):
         """ Initial position in z (microns) of the secondary motor (if any)."""
-        # SI 2023 renamed hMotors.motorPosition to hMotors.samplePosition.
         match = re.search(r'hMotors\.motorPosition = (?P<motor_position>.*)', self.header)
-        if not match:
-            match = re.search(r'hMotors\.samplePosition = (?P<motor_position>.*)', self.header)
         if match:
             motor_position = matlabstr2py(match.group('motor_position'))
             secondary_z = motor_position[3] if len(motor_position) > 3 else None
@@ -637,16 +611,80 @@ class NewerScan():
     def is_slow_stack_with_fastZ(self):
         match = re.search(r'hStackManager\.slowStackWithFastZ = (?P<slow_with_fastZ>.*)',
                           self.header)
+        slow_with_fastZ = (match.group('slow_with_fastZ') in ['true', '1']) if match else None
+        return slow_with_fastZ
+
+
+class NewerScanPost2023():
+    """ Header field changes introduced in ScanImage 2023."""
+
+    @property
+    def num_requested_frames(self):
+        """ SI 2023 moved numVolumes from hFastZ to hStackManager.
+
+        Only the fastZ branch changed; slow stacks still read
+        hStackManager.framesPerSlice, so that case defers to the base class.
+        """
+        if self.is_slow_stack:
+            return super().num_requested_frames
+        match = re.search(r'hStackManager\.numVolumes = (?P<num_frames>.*)', self.header)
+        num_requested_frames = int(1e9 if match.group('num_frames')=='Inf' else
+                                   float(match.group('num_frames'))) if match else None
+        return num_requested_frames
+
+    @property
+    def motor_position_at_zero(self):
+        """ Motor position (x, y and z in microns) corresponding to the scan's (0, 0, 0)
+        point. For non-multiroi scans, (x=0, y=0) marks the center of the FOV.
+
+        SI 2023 renamed hMotors.motorPosition to hMotors.samplePosition.
+        """
+        match = re.search(r'hMotors\.samplePosition = (?P<motor_position>.*)', self.header)
+        motor_position = matlabstr2py(match.group('motor_position'))[:3] if match else None
+        # The samplePosition -> motor_position_at_zero mapping was only validated on
+        # rigs where the gantry motors are disconnected (samplePosition observed as
+        # [0, 0, 0] on every SI 2023 scan tested). If your rig produces non-zero
+        # values, downstream depth calculations (e.g. cajal/pipeline reso.py:113 --
+        # motor_z + field_z) may be wrong. Please verify the semantics for your rig
+        # and update this check.
+        if motor_position is not None and any(v != 0 for v in motor_position):
+            raise NotImplementedError(
+                'motor_position_at_zero = {!r} on a SI 2023 scan. Non-zero '
+                'hMotors.samplePosition values have not been tested for SI 2023 -- '
+                'the [0, 0, 0] case (disconnected gantry) was the only observed '
+                'configuration during initial support. Please validate the '
+                'samplePosition -> motor_position_at_zero mapping semantics '
+                'against downstream depth calculations for your rig and update '
+                'this check in scanreader/scans.py.'.format(motor_position))
+        return motor_position
+
+    @property
+    def initial_secondary_z(self):
+        """ Initial position in z (microns) of the secondary motor (if any).
+
+        SI 2023 renamed hMotors.motorPosition to hMotors.samplePosition.
+        """
+        match = re.search(r'hMotors\.samplePosition = (?P<motor_position>.*)', self.header)
         if match:
-            return match.group('slow_with_fastZ') in ['true', '1']
-        # SI 2023 dropped hStackManager.slowStackWithFastZ. Reconstruct from the pair
-        # (stackMode, stackActuator): True iff a slow-stack mode uses the fastZ actuator
-        # (the state pre-2023 flagged as slowStackWithFastZ = true). Downstream code
-        # (e.g. cajal/pipeline reso.py:113, stack.py:81) uses this flag to discriminate
-        # motor-vs-fastZ actuator identity in slow-stack mode for the Z-direction
-        # convention. Waveform type (stackFastWaveformType = 'step' vs 'sawtooth') is
-        # orthogonal and not consulted here -- fast-mode scans skip this branch entirely
-        # via the outer `if scan.is_slow_stack` check in consumers.
+            motor_position = matlabstr2py(match.group('motor_position'))
+            secondary_z = motor_position[3] if len(motor_position) > 3 else None
+        else:
+            secondary_z = None
+        return secondary_z
+
+    @property
+    def is_slow_stack_with_fastZ(self):
+        """ SI 2023 dropped hStackManager.slowStackWithFastZ.
+
+        Reconstruct it from the pair (stackMode, stackActuator): True iff a
+        slow-stack mode uses the fastZ actuator (the state pre-2023 flagged as
+        slowStackWithFastZ = true). Downstream code (e.g. cajal/pipeline
+        reso.py:113, stack.py:81) uses this flag to discriminate motor-vs-fastZ
+        actuator identity in slow-stack mode for the Z-direction convention.
+        Waveform type (stackFastWaveformType = 'step' vs 'sawtooth') is
+        orthogonal and not consulted here -- fast-mode scans skip this branch
+        entirely via the outer `if scan.is_slow_stack` check in consumers.
+        """
         m_mode = re.search(r"hStackManager\.stackMode = '(?P<mode>[^']*)'", self.header)
         m_act = re.search(r"hStackManager\.stackActuator = '(?P<act>[^']*)'", self.header)
         if m_mode is None or m_act is None:
@@ -718,7 +756,7 @@ class Scan2021(Scan5Point3):
     pass
 
 
-class Scan2023(Scan5Point3):
+class Scan2023(NewerScanPost2023, Scan5Point3): # NewerScanPost2023 first to shadow Scan5Point3's properties
     """ ScanImage 2023"""
     pass
 
@@ -811,26 +849,17 @@ class ScanMultiROI(NewerScan, BaseScan):
         if self.join_contiguous:
             self._join_contiguous_fields()
 
+    def _read_roi_infos(self):
+        """ Raw ROI dicts from the scan's ScanImage metadata.
+
+        Split out from _create_rois so version subclasses can change where the
+        metadata is read from without duplicating ROI construction.
+        """
+        return self.tiff_files[0].scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
+
     def _create_rois(self):
         """Create scan rois from the configuration file. """
-        # tifffile <= 2020.9.3 (the last Python-3.6-compatible release) doesn't
-        # populate scanimage_metadata['RoiGroups'] for SI 2023 headers. The JSON
-        # is still present in the standard TIFF Artist tag (code 315), which SI
-        # writes it to at acquisition time. Fall back to that tag when the
-        # parsed metadata is missing RoiGroups. Modern tifffile users hit the
-        # first branch and behaviour is byte-identical to pre-change.
-        md = self.tiff_files[0].scanimage_metadata
-        if isinstance(md, dict) and 'RoiGroups' in md:
-            roi_infos = md['RoiGroups']['imagingRoiGroup']['rois']
-        else:
-            artist_tag = self.tiff_files[0].pages[0].tags.get(315)  # TIFF Artist
-            if artist_tag is None:
-                raise RuntimeError(
-                    "Cannot locate RoiGroups metadata: scanimage_metadata does "
-                    "not contain 'RoiGroups' and the TIFF file has no Artist "
-                    "tag (315). This scan may not be a valid multiROI SI scan."
-                )
-            roi_infos = json.loads(artist_tag.value)['RoiGroups']['imagingRoiGroup']['rois']
+        roi_infos = self._read_roi_infos()
         roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
         roi_infos = list(filter(lambda r: isinstance(r['zs'], (int, float, list)),
                                 roi_infos)) # discard empty/malformed ROIs
@@ -982,3 +1011,39 @@ class ScanMultiROI(NewerScan, BaseScan):
         item = np.squeeze(item, axis=tuple(squeeze_dims))
 
         return item
+
+
+class ScanMultiROIPost2023(NewerScanPost2023, ScanMultiROI): # NewerScanPost2023 first to shadow ScanMultiROI's properties
+    """ multiROI scan recorded with ScanImage 2023.
+
+    ScanMultiROI plus the SI 2023 header field changes from NewerScanPost2023.
+    read_scan() dispatches here for scans that are both multiROI and 2023.
+    """
+
+    def _read_roi_infos(self):
+        """ Read RoiGroups from the TIFF Artist tag (315) rather than from
+        tifffile's parsed scanimage_metadata.
+
+        SI 2023 writes ScanImage metadata format version 4. tifffile's
+        read_scanimage_metadata() accepts only version 3 and 
+        TiffFile.scanimage_metadata swallows that ValueError, so 'RoiGroups' 
+        is silently absent (verified on tifffile 2020.9.3, the last
+        Python-3.6-compatible release). Newer tifffile releases widened the
+        check and do populate it.
+
+        ScanImage writes the same JSON to the standard TIFF Artist tag at
+        acquisition time, and that tag is readable through the low-level tag
+        API on every tifffile version, so reading it unconditionally gives one
+        code path that is correct regardless of the installed tifffile. Only
+        SI 2023 scans take this path; pre-2023 scans keep using
+        ScanMultiROI._read_roi_infos unchanged.
+        """
+        artist_tag = self.tiff_files[0].pages[0].tags.get(315)  # TIFF Artist
+        if artist_tag is None:
+            raise RuntimeError(
+                'Cannot locate RoiGroups metadata: this SI 2023 scan has no '
+                'TIFF Artist tag (315). ScanImage writes the RoiGroups JSON '
+                'there at acquisition time, so this may not be a valid '
+                'multiROI SI 2023 scan.')
+        return json.loads(artist_tag.value)['RoiGroups']['imagingRoiGroup']['rois']
+    

@@ -12,6 +12,7 @@ from glob import glob
 from os import path
 import numpy as np
 import re
+import warnings
 from .exceptions import ScanImageVersionError, PathnameError
 from . import scans
 
@@ -50,10 +51,25 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     version = get_scanimage_version(file_info)
 
     # Select the appropriate scan object
-    
+    if version == '2023':
+        warnings.warn(
+            "\n     ! Scan recognized as a ScanImage 2023 scan. ScanImage 2023\n     "
+            "is not fully supported, and was only validated on a limited\n     "
+            "set of scans. Use at your own risk and verify the results.\n     "
+            "If this is NOT a ScanImage 2023 scan, something has\n     "
+            "gone wrong in version detection and this is an error. !\n",
+            RuntimeWarning, stacklevel=2)
+            
     if (version in ['2016b', '2017a', '2017b', '2018a', '2018b', '2019a', '2019b', '2020', '2021', '2023'] and
             is_scan_multiROI(file_info)):
-        scan = scans.ScanMultiROI(join_contiguous=join_contiguous)
+        # SI 2023 multiROI scans need both the multiROI machinery and the 2023
+        # header-field changes, so they get their own class rather than a
+        # version check inside ScanMultiROI.
+        if version == '2023':
+            scan = scans.ScanMultiROIPost2023(join_contiguous=join_contiguous)
+        else:
+            scan = scans.ScanMultiROI(join_contiguous=join_contiguous)
+
     elif version in _scans:
         scan = _scans[version]()
     else:
