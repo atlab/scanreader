@@ -12,6 +12,7 @@ from glob import glob
 from os import path
 import numpy as np
 import re
+import warnings
 from .exceptions import ScanImageVersionError, PathnameError
 from . import scans
 
@@ -22,7 +23,8 @@ _scans = {'5.1': scans.Scan5Point1, '5.2': scans.Scan5Point2, '5.3': scans.Scan5
           '2017a': scans.Scan2017a, '2017b': scans.Scan2017b, 
           '2018a': scans.Scan2018a, '2018b': scans.Scan2018b,
           '2019a': scans.Scan2019a, '2019b': scans.Scan2019b,
-          '2020': scans.Scan2020, '2021': scans.Scan2021}
+          '2020': scans.Scan2020, '2021': scans.Scan2021,
+          '2023': scans.Scan2023}
 
 def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     """ Reads a ScanImage scan.
@@ -49,10 +51,11 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     version = get_scanimage_version(file_info)
 
     # Select the appropriate scan object
-    
-    if (version in ['2016b', '2017a', '2017b', '2018a', '2018b', '2019a', '2019b', '2020', '2021'] and
+    if (version in ['2016b', '2017a', '2017b', '2018a', '2018b', '2019a', '2019b', '2020', '2021', '2023'] and
             is_scan_multiROI(file_info)):
         scan = scans.ScanMultiROI(join_contiguous=join_contiguous)
+    elif (version == '2023' and is_scan_multiROI(file_info)):
+            scan = scans.ScanMultiROIPost2023(join_contiguous=join_contiguous)            
     elif version in _scans:
         scan = _scans[version]()
     else:

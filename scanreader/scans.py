@@ -21,13 +21,16 @@ BaseScan
                 Scan2019a
                 Scan2019b
                 Scan2020
+                Scan2023 (+ NewerScanPost2023)
     ScanMultiRoi
+        ScanMultiROIPost2023 (+ NewerScanPost2023)
 """
 from tifffile import TiffFile
 from tifffile.tifffile import matlabstr2py
 import numpy as np
 import re
 import itertools
+import json
 from . import utils
 from .multiroi import ROI
 from .exceptions import FieldDimensionMismatch
@@ -612,6 +615,58 @@ class NewerScan():
         return slow_with_fastZ
 
 
+class NewerScanPost2023():
+    """ Header field changes introduced in ScanImage 2023."""
+
+    @property
+    def num_requested_frames(self):
+        """ SI 2023 moved numVolumes from hFastZ to hStackManager.
+
+        Only the fastZ branch changed; slow stacks still read
+        hStackManager.framesPerSlice, so that case defers to the base class.
+        """
+        if self.is_slow_stack:
+            return super().num_requested_frames
+        match = re.search(r'hStackManager\.numVolumes = (?P<num_frames>.*)', self.header)
+        num_requested_frames = int(1e9 if match.group('num_frames')=='Inf' else
+                                   float(match.group('num_frames'))) if match else None
+        return num_requested_frames
+
+    @property
+    def motor_position_at_zero(self):
+        """ Motor position (x, y and z in microns) corresponding to the scan's (0, 0, 0)
+        point. For non-multiroi scans, (x=0, y=0) marks the center of the FOV.
+
+        SI 2023 renamed hMotors.motorPosition to hMotors.samplePosition.
+        """
+        match = re.search(r'hMotors\.samplePosition = (?P<motor_position>.*)', self.header)
+        motor_position = matlabstr2py(match.group('motor_position'))[:3] if match else None
+        return motor_position
+
+    @property
+    def initial_secondary_z(self):
+        """ Initial position in z (microns) of the secondary motor (if any).
+
+        SI 2023 renamed hMotors.motorPosition to hMotors.samplePosition.
+        """
+        match = re.search(r'hMotors\.samplePosition = (?P<motor_position>.*)', self.header)
+        if match:
+            motor_position = matlabstr2py(match.group('motor_position'))
+            secondary_z = motor_position[3] if len(motor_position) > 3 else None
+        else:
+            secondary_z = None
+        return secondary_z
+
+    @property
+    def is_slow_stack_with_fastZ(self):
+        """ SI 2023 dropped hStackManager.slowStackWithFastZ. """
+        m_mode = re.search(r"hStackManager\.stackMode = '(?P<mode>[^']*)'", self.header)
+        m_act = re.search(r"hStackManager\.stackActuator = '(?P<act>[^']*)'", self.header)
+        if m_mode is None or m_act is None:
+            return None
+        return m_mode.group('mode') == 'slow' and m_act.group('act') == 'fastZ'
+
+
 class Scan5Point3(NewerScan, Scan5Point2): # NewerScan first to shadow Scan5Point2's properties
     """ScanImage 5.3"""
     pass
@@ -673,6 +728,11 @@ class Scan2020(Scan5Point3):
 
 class Scan2021(Scan5Point3):
     """ ScanImage 2021"""
+    pass
+
+
+class Scan2023(NewerScanPost2023, Scan5Point3): # NewerScanPost2023 first to shadow Scan5Point3's properties
+    """ ScanImage 2023"""
     pass
 
 
@@ -764,9 +824,13 @@ class ScanMultiROI(NewerScan, BaseScan):
         if self.join_contiguous:
             self._join_contiguous_fields()
 
+    def _read_roi_infos(self):
+        """ Raw ROI dicts from the scan's ScanImage metadata."""
+        return self.tiff_files[0].scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
+
     def _create_rois(self):
         """Create scan rois from the configuration file. """
-        roi_infos = self.tiff_files[0].scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
+        roi_infos = self._read_roi_infos()
         roi_infos = roi_infos if isinstance(roi_infos, list) else [roi_infos]
         roi_infos = list(filter(lambda r: isinstance(r['zs'], (int, float, list)),
                                 roi_infos)) # discard empty/malformed ROIs
@@ -918,3 +982,19 @@ class ScanMultiROI(NewerScan, BaseScan):
         item = np.squeeze(item, axis=tuple(squeeze_dims))
 
         return item
+
+
+class ScanMultiROIPost2023(NewerScanPost2023, ScanMultiROI): # NewerScanPost2023 first to shadow ScanMultiROI's properties
+    """ multiROI scan recorded with ScanImage 2023."""
+
+    def _read_roi_infos(self):
+        """ Read RoiGroups from the TIFF Artist tag (315) rather than from
+        tifffile's parsed scanimage_metadata.
+
+        SI 2023 writes ScanImage metadata format version 4, which tifffile
+        <=2020.9.3 rejects. ScanImagewrites the same JSON to the TIFF regardless 
+        of tifffile version.
+        """
+        artist_tag = self.tiff_files[0].pages[0].tags.get(315)  # TIFF Artist
+        return json.loads(artist_tag.value)['RoiGroups']['imagingRoiGroup']['rois']
+    

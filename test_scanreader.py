@@ -9,6 +9,7 @@ from unittest import TestCase
 from os import path
 import numpy as np
 import scanreader
+from scanreader import scans
 from scanreader.exceptions import ScanReaderException
 
 # Get data directory
@@ -24,6 +25,8 @@ scan_file_2020 = path.join(data_dir, 'scan_2020.tif') # 2 channels, 1 slice
 scan_file_2016b_multiroi = path.join(data_dir, 'scan_2016b_multiroi_001.tif') # all rois have same dimensions, 1 channel 5 slices
 scan_file_2018a_multiroi = path.join(data_dir, 'scan_2018a_multiroi_001.tif') # all rois have same dimensions, 1 channel 3 slices, 5 fields per slice
 scan_file_2016b_multiroi_hard = path.join(data_dir, 'scan_2016b_multiroi_hard.tif') # rois have diff dimensions and they are volumes, 2 channels, 3 slices, roi1 at depth1, roi1 and 2 at depth 2, roi 2 at depth 2, thus 4 fields
+scan_file_2023 = path.join(data_dir, 'scan_2023.tif') # SI 2023 non-MROI reference scan, no stack, 1 channel, 100 frames, 512x512, exercises Scan2023 class dispatch + samplePosition
+scan_file_2023_multiroi = path.join(data_dir, 'scan_2023_multiroi.tif') # SI 2023 MROI reference scan, fastZ 10 scanning depths (0-90um in 10um steps), 1 ROI, 10 volumes, exercises ScanMultiROIPost2023 dispatch + hStackManager.numVolumes + samplePosition
 scan_file_5_1_multifiles = [path.join(data_dir, 'scan_5_1_001.tif'), path.join(data_dir, 'scan_5_1_002.tif')] # second file has less pages
 scan_file_2016b_multiroi_multifiles = [path.join(data_dir, 'scan_2016b_multiroi_001.tif'), path.join(data_dir, 'scan_2016b_multiroi_002.tif')]
 scan_file_join_contiguous = scan_file_2016b_multiroi
@@ -173,6 +176,82 @@ class ScanTest(TestCase):
             self.assertEqual(scan.field_masks[i].tolist(), np.full([512, 512], i % 5).tolist())
             self.assertAlmostEqual(scan.field_heights_in_microns[i], heights_in_microns[i], places=4)
             self.assertAlmostEqual(scan.field_widths_in_microns[i], widths_in_microns[i], places=4)
+
+        # 2023 non-MROI reference scan. SI 2023 header changes live in the
+        # NewerScanPost2023 mixin, which Scan2023 pulls in; motor_position_at_zero
+        # reads hMotors.samplePosition (SI 2023 no longer emits motorPosition).
+        scan = scanreader.read_scan(scan_file_2023)
+        self.assertEqual(scan.version, '2023')
+        self.assertEqual(scan.is_slow_stack, True)
+        self.assertEqual(scan.is_multiROI, False)
+        self.assertEqual(scan.num_channels, 1)
+        self.assertEqual(scan.requested_scanning_depths, [0])
+        self.assertEqual(scan.num_scanning_depths, 1)
+        self.assertEqual(scan.scanning_depths, [0])
+        self.assertEqual(scan.num_requested_frames, 100)
+        self.assertEqual(scan.num_frames, 100)
+        self.assertEqual(scan.is_bidirectional, True)
+        self.assertAlmostEqual(scan.scanner_frequency, 12171.5)
+        self.assertAlmostEqual(scan.seconds_per_line, 4.107957112927741e-05)
+        self.assertEqual(scan.num_fields, 1)
+        self.assertEqual(scan.field_depths, [0])
+        self.assertAlmostEqual(scan.fps, 45.24721189591079)
+        self.assertAlmostEqual(scan.spatial_fill_fraction, 0.9238795325112867)
+        self.assertAlmostEqual(scan.temporal_fill_fraction, 0.75)
+        self.assertEqual(scan.scanner_type, 'RGG')
+        self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
+        self.assertEqual(scan.initial_secondary_z, None)
+        # SI 2023 dropped hStackManager.slowStackWithFastZ; NewerScanPost2023
+        # reconstructs from (stackMode, stackActuator). This scan is slow+motor /
+        # fast+fastZ, neither of which qualifies as "slow stack with fastZ".
+        self.assertEqual(scan.is_slow_stack_with_fastZ, False)
+        self.assertEqual(scan.image_height, 512)
+        self.assertEqual(scan.image_width, 512)
+        self.assertEqual(scan.zoom, 1)
+        self.assertAlmostEqual(scan.image_height_in_microns, 640.2485160303218)
+        self.assertAlmostEqual(scan.image_width_in_microns, 640.2485160303218)
+
+        # 2023 multiROI (fastZ + 10 scanning depths). Dispatches to
+        # ScanMultiROIPost2023 -- multiROI machinery plus the SI 2023 header
+        # changes: samplePosition (SI 2023 no longer emits hMotors.motorPosition)
+        # and hStackManager.numVolumes (no longer hFastZ.numVolumes on fastZ).
+        scan = scanreader.read_scan(scan_file_2023_multiroi)
+        self.assertEqual(scan.version, '2023')
+        self.assertEqual(scan.is_slow_stack, False)
+        self.assertEqual(scan.is_multiROI, True)
+        self.assertEqual(scan.num_channels, 1)
+        self.assertEqual(scan.requested_scanning_depths,
+                         [0, 10, 20, 30, 40, 50, 60, 70, 80, 90])
+        self.assertEqual(scan.num_scanning_depths, 10)
+        # numVolumes: was hFastZ.numVolumes pre-2023, now hStackManager.numVolumes
+        self.assertEqual(scan.num_requested_frames, 10)
+        self.assertEqual(scan.num_frames, 10)
+        self.assertEqual(scan.is_bidirectional, True)
+        self.assertAlmostEqual(scan.scanner_frequency, 12054.20651305172)
+        self.assertAlmostEqual(scan.seconds_per_line, 4.147929599999998e-05)
+        self.assertEqual(scan.num_fields, 10)
+        self.assertEqual(scan.field_depths,
+                         [0, 10, 20, 30, 40, 50, 60, 70, 80, 90])
+        self.assertAlmostEqual(scan.fps, 8.672091016583972)
+        self.assertAlmostEqual(scan.spatial_fill_fraction, 0.9238795325112867)
+        self.assertAlmostEqual(scan.temporal_fill_fraction, 0.75)
+        self.assertEqual(scan.scanner_type, 'RGG')
+        # samplePosition (SI 2023 no longer emits motorPosition)
+        self.assertEqual(scan.motor_position_at_zero, [0, 0, 0])
+        # samplePosition is 3-tuple, so no secondary-Z entry
+        self.assertEqual(scan.initial_secondary_z, None)
+        # SI 2023 dropped hStackManager.slowStackWithFastZ; NewerScanPost2023
+        # reconstructs from (stackMode, stackActuator). This scan is slow+motor /
+        # fast+fastZ, neither of which qualifies as "slow stack with fastZ".
+        self.assertEqual(scan.is_slow_stack_with_fastZ, False)
+        self.assertEqual(scan.num_rois, 1)
+        self.assertEqual(scan.field_heights, [252] * 10)
+        self.assertEqual(scan.field_widths, [252] * 10)
+        self.assertEqual(scan.field_slices, list(range(10)))
+        self.assertEqual(scan.field_rois, [[0]] * 10)
+        for i in range(10):
+            self.assertAlmostEqual(scan.field_heights_in_microns[i], 630.0, places=4)
+            self.assertAlmostEqual(scan.field_widths_in_microns[i], 630.0, places=4)
 
 
     def assertEqualShapeAndSum(self, array, expected_shape, expected_sum):
@@ -386,6 +465,56 @@ class ScanTest(TestCase):
         first_frame = scan[-2:, :, :, :, 0]
         self.assertEqualShapeAndSum(first_frame, (2, 512, 512, 2), 290883684)
 
+
+    def test_2023(self):
+        scan = scanreader.read_scan(scan_file_2023)
+
+        # Test it is iterable
+        fields_sum = [-352739398]
+        for i, field in enumerate(scan):
+            self.assertEqualShapeAndSum(field, (512, 512, 1, 100), fields_sum[i])
+
+        # Test it can be obtained as array
+        scan_as_array = np.array(scan)
+        self.assertEqualShapeAndSum(scan_as_array, (1, 512, 512, 1, 100), -352739398)
+
+        # Test indexation
+        first_field = scan[0, :, :, :, :]
+        self.assertEqualShapeAndSum(first_field, (512, 512, 1, 100), -352739398)
+        first_row = scan[:, 0, :, :, :]
+        self.assertEqualShapeAndSum(first_row, (1, 512, 1, 100), -689394)
+        first_column = scan[:, :, 0, :, :]
+        self.assertEqualShapeAndSum(first_column, (1, 512, 1, 100), -692226)
+        first_channel = scan[:, :, :, 0, :]
+        self.assertEqualShapeAndSum(first_channel, (1, 512, 512, 100), -352739398)
+        first_frame = scan[:, :, :, :, 0]
+        self.assertEqualShapeAndSum(first_frame, (1, 512, 512, 1), -2870929)
+
+
+    def test_2023_multiroi(self):
+        scan = scanreader.read_scan(scan_file_2023_multiroi)
+
+        # Test it is iterable
+        fields_sum = [-8810124, -8492515, -8481596, -8265343, -8522384,
+                      -8468046, -8675880, -8680772, -8806114, -8867568]
+        for i, field in enumerate(scan):
+            self.assertEqualShapeAndSum(field, (252, 252, 1, 10), fields_sum[i])
+
+        # Test it can be obtained as array
+        scan_as_array = np.array(scan)
+        self.assertEqualShapeAndSum(scan_as_array, (10, 252, 252, 1, 10), -86070342)
+
+        # Test indexation
+        first_field = scan[0, :, :, :, :]
+        self.assertEqualShapeAndSum(first_field, (252, 252, 1, 10), -8810124)
+        first_row = scan[:, 0, :, :, :]
+        self.assertEqualShapeAndSum(first_row, (10, 252, 1, 10), -349786)
+        first_column = scan[:, :, 0, :, :]
+        self.assertEqualShapeAndSum(first_column, (10, 252, 1, 10), -339326)
+        first_channel = scan[:, :, :, 0, :]
+        self.assertEqualShapeAndSum(first_channel, (10, 252, 252, 10), -86070342)
+        first_frame = scan[:, :, :, :, 0]
+        self.assertEqualShapeAndSum(first_frame, (10, 252, 252, 1), -8979518)
 
     def test_2018a_multiroi(self):
         scan = scanreader.read_scan(scan_file_2018a_multiroi)
