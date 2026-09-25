@@ -825,11 +825,7 @@ class ScanMultiROI(NewerScan, BaseScan):
             self._join_contiguous_fields()
 
     def _read_roi_infos(self):
-        """ Raw ROI dicts from the scan's ScanImage metadata.
-
-        Split out from _create_rois so version subclasses can change where the
-        metadata is read from without duplicating ROI construction.
-        """
+        """ Raw ROI dicts from the scan's ScanImage metadata."""
         return self.tiff_files[0].scanimage_metadata['RoiGroups']['imagingRoiGroup']['rois']
 
     def _create_rois(self):
