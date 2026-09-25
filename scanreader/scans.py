@@ -996,8 +996,8 @@ class ScanMultiROIPost2023(NewerScanPost2023, ScanMultiROI): # NewerScanPost2023
         tifffile's parsed scanimage_metadata.
 
         SI 2023 writes ScanImage metadata format version 4, which tifffile
-        <=2020.9.3 rejects, leaving 'RoiGroups' silently absent. ScanImage
-        writes the same JSON to the TIFF regardless of tifffile version.
+        <=2020.9.3 rejects. ScanImagewrites the same JSON to the TIFF regardless 
+        of tifffile version.
         """
         artist_tag = self.tiff_files[0].pages[0].tags.get(315)  # TIFF Artist
         return json.loads(artist_tag.value)['RoiGroups']['imagingRoiGroup']['rois']
