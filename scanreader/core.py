@@ -12,7 +12,6 @@ from glob import glob
 from os import path
 import numpy as np
 import re
-import warnings
 from .exceptions import ScanImageVersionError, PathnameError
 from . import scans
 
@@ -51,7 +50,7 @@ def read_scan(pathnames, dtype=np.int16, join_contiguous=False):
     version = get_scanimage_version(file_info)
 
     # Select the appropriate scan object
-    if (version in ['2016b', '2017a', '2017b', '2018a', '2018b', '2019a', '2019b', '2020', '2021', '2023'] and
+    if (version in ['2016b', '2017a', '2017b', '2018a', '2018b', '2019a', '2019b', '2020', '2021'] and
             is_scan_multiROI(file_info)):
         scan = scans.ScanMultiROI(join_contiguous=join_contiguous)
     elif (version == '2023' and is_scan_multiROI(file_info)):
