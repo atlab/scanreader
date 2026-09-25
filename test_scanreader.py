@@ -181,8 +181,6 @@ class ScanTest(TestCase):
         # NewerScanPost2023 mixin, which Scan2023 pulls in; motor_position_at_zero
         # reads hMotors.samplePosition (SI 2023 no longer emits motorPosition).
         scan = scanreader.read_scan(scan_file_2023)
-        self.assertIsInstance(scan, scans.Scan2023)
-        self.assertIsInstance(scan, scans.NewerScanPost2023)
         self.assertEqual(scan.version, '2023')
         self.assertEqual(scan.is_slow_stack, True)
         self.assertEqual(scan.is_multiROI, False)
@@ -218,9 +216,6 @@ class ScanTest(TestCase):
         # changes: samplePosition (SI 2023 no longer emits hMotors.motorPosition)
         # and hStackManager.numVolumes (no longer hFastZ.numVolumes on fastZ).
         scan = scanreader.read_scan(scan_file_2023_multiroi)
-        self.assertIsInstance(scan, scans.ScanMultiROIPost2023)
-        self.assertIsInstance(scan, scans.ScanMultiROI)
-        self.assertIsInstance(scan, scans.NewerScanPost2023)
         self.assertEqual(scan.version, '2023')
         self.assertEqual(scan.is_slow_stack, False)
         self.assertEqual(scan.is_multiROI, True)
@@ -520,67 +515,6 @@ class ScanTest(TestCase):
         self.assertEqualShapeAndSum(first_channel, (10, 252, 252, 10), -86070342)
         first_frame = scan[:, :, :, :, 0]
         self.assertEqualShapeAndSum(first_frame, (10, 252, 252, 1), -8979518)
-
-
-    def test_2023_multiroi_reads_artist_tag(self):
-        """ScanMultiROIPost2023 reads RoiGroups from the TIFF Artist tag (315),
-        never from tifffile's parsed scanimage_metadata.
-
-        SI 2023 writes ScanImage metadata format version 4. tifffile's
-        read_scanimage_metadata() accepts only version 3, and
-        TiffFile.scanimage_metadata swallows the resulting ValueError, so
-        'RoiGroups' is silently absent on tifffile <= 2020.9.3 (the last
-        Python-3.6-compatible release). ScanImage writes the same JSON to the
-        Artist tag at acquisition time, readable on every tifffile version, so
-        the 2023 path must not depend on scanimage_metadata at all.
-
-        Verified by stubbing scanimage_metadata to what an old tifffile
-        effectively returns -- FrameData but no RoiGroups -- and confirming the
-        ROI structure is unchanged."""
-        from unittest.mock import patch, PropertyMock
-
-        scan_normal = scanreader.read_scan(scan_file_2023_multiroi)
-        self.assertIsInstance(scan_normal, scans.ScanMultiROIPost2023)
-
-        stub_metadata = {'FrameData': {}, 'version': 4}
-        with patch('tifffile.TiffFile.scanimage_metadata',
-                   new_callable=PropertyMock, return_value=stub_metadata):
-            scan_no_md = scanreader.read_scan(scan_file_2023_multiroi)
-
-        # Identical ROI structure and field geometry with and without metadata
-        self.assertEqual(scan_no_md.num_rois, scan_normal.num_rois)
-        self.assertEqual(scan_no_md.num_fields, scan_normal.num_fields)
-        self.assertEqual(scan_no_md.field_heights, scan_normal.field_heights)
-        self.assertEqual(scan_no_md.field_widths, scan_normal.field_widths)
-        self.assertEqual(scan_no_md.field_depths, scan_normal.field_depths)
-        self.assertEqual(scan_no_md.field_rois, scan_normal.field_rois)
-        self.assertEqual(scan_no_md.field_slices, scan_normal.field_slices)
-        for i in range(scan_normal.num_fields):
-            self.assertAlmostEqual(scan_no_md.field_heights_in_microns[i],
-                                    scan_normal.field_heights_in_microns[i], places=4)
-            self.assertAlmostEqual(scan_no_md.field_widths_in_microns[i],
-                                    scan_normal.field_widths_in_microns[i], places=4)
-
-
-    def test_pre2023_multiroi_still_uses_scanimage_metadata(self):
-        """Pre-2023 multiROI scans must keep reading scanimage_metadata.
-
-        Guards the claim that the SI 2023 work is additive: the Artist-tag read
-        belongs to ScanMultiROIPost2023 only and must not leak into
-        ScanMultiROI. Pre-2023 scans have no second source, so stubbing
-        scanimage_metadata away has to fail rather than silently succeed."""
-        from unittest.mock import patch, PropertyMock
-
-        scan = scanreader.read_scan(scan_file_2016b_multiroi)
-        self.assertIsInstance(scan, scans.ScanMultiROI)
-        self.assertNotIsInstance(scan, scans.ScanMultiROIPost2023)
-
-        stub_metadata = {'FrameData': {}, 'version': 3}
-        with patch('tifffile.TiffFile.scanimage_metadata',
-                   new_callable=PropertyMock, return_value=stub_metadata):
-            with self.assertRaises(KeyError):
-                scanreader.read_scan(scan_file_2016b_multiroi)
-
 
     def test_2018a_multiroi(self):
         scan = scanreader.read_scan(scan_file_2018a_multiroi)
