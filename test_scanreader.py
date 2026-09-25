@@ -9,7 +9,6 @@ from unittest import TestCase
 from os import path
 import numpy as np
 import scanreader
-from scanreader import scans
 from scanreader.exceptions import ScanReaderException
 
 # Get data directory
